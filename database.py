@@ -209,6 +209,34 @@ class Database:
             conn.commit()
             logger.info("Barcha jadvallar yaratildi!")
 
+        self._seed_default_lugat_books()
+
+    def _seed_default_lugat_books(self):
+        """Lug'at uchun standart kitoblarni bir martalik (idempotent) urug'laydi.
+        A1/A2/B1 -> Motive/Schritte/Menschen
+        B2/C1    -> Sicher/KompassDaF/Aspekte
+        Har bir daraja+kitob - alohida, mustaqil DB qatori (bittasini
+        to'ldirish boshqasiga ta'sir qilmaydi)."""
+        default_books = {
+            "a1": ["Motive", "Schritte", "Menschen"],
+            "a2": ["Motive", "Schritte", "Menschen"],
+            "b1": ["Motive", "Schritte", "Menschen"],
+            "b2": ["Sicher", "KompassDaF", "Aspekte"],
+            "c1": ["Sicher", "KompassDaF", "Aspekte"],
+        }
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            for level, names in default_books.items():
+                cursor.execute("SELECT COUNT(*) as c FROM lugat_books WHERE level = ?", (level,))
+                if cursor.fetchone()["c"] > 0:
+                    continue  # bu daraja uchun kitoblar allaqachon mavjud
+                for name in names:
+                    cursor.execute(
+                        "INSERT INTO lugat_books (level, name) VALUES (?, ?)",
+                        (level, name),
+                    )
+            conn.commit()
+
     # ==================== USERS ====================
 
     def get_or_create_user(self, user_id: int, username=None, first_name=None, last_name=None):

@@ -73,11 +73,14 @@ from settings import (
 
 
 # ==================== PASTKI DOIMIY MENYU ====================
+# Mini App tuzilmasiga moslab qurilgan asosiy navigatsiya
 REPLY_KEYBOARD = ReplyKeyboardMarkup(
     [
-        ["📚 Menyu", "📖 Kunlik so'z"],
-        ["🤖 AI Mentor", "📊 Progressim"],
-        ["🌐 Tarjimon", "ℹ️ Yordam"],
+        ["🤖 AI Mentor", "📖 Lug'at"],
+        ["🌐 Tarjimon", "📚 Sayfa"],
+        ["📚 Kitob Materiallar", "📖 Kunlik so'z"],
+        ["📊 Progressim", "⚙️ Sozlamalar"],
+        ["📝 Test"],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -146,20 +149,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = (
         f"🇩🇪 *Deutsch Meister PRO*\n\n"
         f"Salom, {esc_md(user.first_name)}\! 👋\n\n"
-        f"Bu bot nemis tilini o'rganish uchun yaratilgan\:\n\n"
-        f"🤖 *AI Mentor* \- Shaxsiy yordamchi\n"
-        f"📖 *Lug'at* \- Darajaga qarab so'zlar\n"
-        f"🌐 *Tarjimon* \- UZB \<\-\> DEU\n"
-        f"📚 *Sayfa* \- Kitob va audio\n"
-        f"📚 *Kitob Materiallar* \- PDF, audio, video\n"
-        f"📖 *Kunlik so'z* \- Har kuni yangi so'z\n\n"
-        f"*Quyidagilardan birini tanlang\:*"
+        f"Bu bot nemis tilini o'rganish uchun yaratilgan\.\n\n"
+        f"Pastdagi tugmalardan birini tanlang\:"
     )
 
     await update.message.reply_text(
         text,
         parse_mode="MarkdownV2",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=REPLY_KEYBOARD,
     )
     return MAIN_MENU
 
@@ -197,9 +194,8 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     elif data == "main_menu":
         await query.edit_message_text(
-            "🇩🇪 *Deutsch Meister PRO*\n\n*Asosiy menyu\:*",
+            "🇩🇪 *Deutsch Meister PRO*\n\n*Asosiy menyu\:*\n\nPastdagi tugmalardan birini tanlang\.",
             parse_mode="MarkdownV2",
-            reply_markup=main_menu_keyboard(),
         )
         return MAIN_MENU
 
@@ -246,10 +242,7 @@ def lugat_level_keyboard():
 
 async def lugat_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Lug'at menyu - daraja tanlash"""
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text(
+    text = (
         "📖 *Lug'at*\n\n"
         "Darajangizni tanlang\:\n\n"
         "🟢 *A1* \- Boshlang'ich\n"
@@ -257,10 +250,14 @@ async def lugat_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "🟡 *B1* \- O'rta\n"
         "🟡 *B2* \- Yuqori o'rta\n"
         "🔵 *C1* \- Yuqori\n\n"
-        "*Har bir darajada o'z bo'limlari mavjud\.*",
-        parse_mode="MarkdownV2",
-        reply_markup=lugat_level_keyboard(),
+        "*Har bir darajada o'z bo'limlari mavjud\.*"
     )
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=lugat_level_keyboard())
+    else:
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=lugat_level_keyboard())
     return LUGAT_MENU
 
 
@@ -562,21 +559,22 @@ async def translator_speak(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def sayfa_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Sayfa menyu"""
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text(
+    text = (
         "📚 *Sayfa*\n\n"
         "Kitob va audio materiallar\n\n"
-        "*Mavjud kitoblar\:*",
-        parse_mode="MarkdownV2",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📗 B1 Sayfa", callback_data="sayfa_b1")],
-            [InlineKeyboardButton("📙 B2 Sayfa", callback_data="sayfa_b2")],
-            [InlineKeyboardButton("📕 C1 Sayfa", callback_data="sayfa_c1")],
-            [InlineKeyboardButton("↩️ Asosiy menyu", callback_data="main_menu")],
-        ]),
+        "*Bo'limni tanlang\:*"
     )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📗 B1 TELC", callback_data="sayfa_b1telc")],
+        [InlineKeyboardButton("📦 Qolgan Materiallar", callback_data="sayfa_qolgan")],
+        [InlineKeyboardButton("↩️ Asosiy menyu", callback_data="main_menu")],
+    ])
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     return SAYFA_MENU
 
 
@@ -736,20 +734,21 @@ def kitob_level_keyboard():
 
 async def kitob_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Kitob materiallar menyu"""
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text(
+    text = (
         "📚 *Kitob Materiallar*\n\n"
         "Darajangizni tanlang\:\n\n"
         "🟢 *A1* \| *A2* \- Boshlang'ich\n"
         "🟡 *B1* \| *B2* \- O'rta\n"
         "🔵 *C1* \- Yuqori\n"
         "🔴 *C2* \- Mukammal\n\n"
-        "*Har bir darajada kitoblar, PDF, audio va videolar\.*",
-        parse_mode="MarkdownV2",
-        reply_markup=kitob_level_keyboard(),
+        "*Har bir darajada kitoblar, PDF, audio va videolar\.*"
     )
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=kitob_level_keyboard())
+    else:
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=kitob_level_keyboard())
     return KITOB_MENU
 
 
