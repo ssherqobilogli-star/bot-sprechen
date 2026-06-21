@@ -93,9 +93,9 @@ ADMIN_REPLY_KEYBOARD = ReplyKeyboardMarkup(
     # Tarjimon
     TARJIMON_MENU, TARJIMON_UZB_DEU, TARJIMON_DEU_UZB,
     # Sayfa
-    SAYFA_MENU, SAYFA_BOOK, SAYFA_VIEW,
+    SAYFA_MENU, SAYFA_BOOK,
     # Kitob
-    KITOB_MENU, KITOB_LEVEL, KITOB_BOOK, KITOB_VIEW,
+    KITOB_MENU, KITOB_LEVEL, KITOB_BOOK,
     # Kunlik so'z
     DAILY_WORD,
     # Progress
@@ -104,7 +104,7 @@ ADMIN_REPLY_KEYBOARD = ReplyKeyboardMarkup(
     SETTINGS_MENU, SETTINGS_VOICE, SETTINGS_SPEED, SETTINGS_LEVEL,
     # Test
     TEST_MENU, TEST_LEVEL, TEST_QUIZ, TEST_RESULT,
-) = range(40)
+) = range(38)
 
 
 # ==================== /START - Telefon raqam so'rash ====================
@@ -128,8 +128,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     await update.message.reply_text(
         f"🇩🇪 *Deutsch Meister PRO*\n\n"
-        f"Salom, {esc_md(user.first_name)}\! 👋\n\n"
-        f"Botdan to'liq foydalanish uchun telefon raqamingizni yuboring\.",
+        f"Salom, {esc_md(user.first_name)}\\! 👋\n\n"
+        f"Botdan to'liq foydalanish uchun telefon raqamingizni yuboring\\.",
         parse_mode="MarkdownV2",
         reply_markup=phone_keyboard,
     )
@@ -169,7 +169,7 @@ async def receive_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                     f"🆔 *ID:* `{user.id}`\n"
                     f"📱 *Telefon:* `{esc_md(phone)}`\n"
                     f"📅 *Sana:* {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
-                    f"✅ Botda ro'yxatdan o'tdi\!"
+                    f"✅ Botda ro'yxatdan o'tdi\\!"
                 ),
                 parse_mode="MarkdownV2",
             )
@@ -177,9 +177,9 @@ async def receive_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             logger.warning(f"Admin {admin_id} ga xabar yuborib bo'lmadi: {e}")
 
     await update.message.reply_text(
-        f"✅ *Raqam qabul qilindi\!*\n\n"
+        f"✅ *Raqam qabul qilindi\\!*\n\n"
         f"📱 `{esc_md(phone)}`\n\n"
-        f"Endi botdan to'liq foydalanishingiz mumkin\.",
+        f"Endi botdan to'liq foydalanishingiz mumkin\\.",
         parse_mode="MarkdownV2",
     )
     return await show_main_menu(update, context)
@@ -195,7 +195,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     text = (
         f"🇩🇪 *Deutsch Meister PRO*\n\n"
-        f"Salom, {esc_md(user.first_name)}\! 👋\n\n"
+        f"Salom, {esc_md(user.first_name)}\\! 👋\n\n"
         f"📚 *Joriy daraja:* {esc_md(LEVEL_LABELS.get(db_user.get('current_level', 'a1'), 'A1'))}\n"
         f"⭐ *XP:* {db_user.get('total_xp', 0)}\n\n"
         f"Quyidagi bo'limlardan birini tanlang:"
@@ -392,7 +392,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     db.log_broadcast(update.effective_user.id, message, sent)
 
     await status_msg.edit_text(
-        f"✅ *Yuborildi\!*\n\n"
+        f"✅ *Yuborildi\\!*\n\n"
         f"📤 Muvaffaqiyatli: {sent}\n"
         f"❌ Muvaffaqiyatsiz: {failed}"
     )
@@ -452,7 +452,7 @@ async def vorstellen_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     caption=(
                         "🎤 *Vorstellen — O'zingizni taqdim etish*\n\n"
                         "Yuqoridagi 7 ta savolga javob bering.\n\n"
-                        "📝 Matn yozing YOKI 🎙️ ovozli xabar yuboring\!"
+                        "📝 Matn yozing YOKI 🎙️ ovozli xabar yuboring\\!"
                     ),
                     parse_mode="MarkdownV2",
                 )
@@ -476,7 +476,7 @@ async def vorstellen_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await context.bot.send_message(
         chat_id=query.message.chat_id,
         text=(
-            "⏱️ *10 daqiqa vaqt berildi\!*\n\n"
+            "⏱️ *10 daqiqa vaqt berildi\\!*\n\n"
             "📝 Matn yozing YOKI 🎙️ ovozli xabar yuboring\n"
             "_Bir nechta xabar yuborsangiz ham bo'ladi — hammasi birlashtiriladi_\n\n"
             "Tayyor bo'lganda \"Yakunlash\" tugmasini bosing:"
@@ -502,7 +502,7 @@ async def vorstellen_collect(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.message.text:
         answers.append(update.message.text)
         await update.message.reply_text(
-            "✅ *Qabul qilindi\!* Davom etishingiz yoki yakunlashingiz mumkin\.",
+            "✅ *Qabul qilindi\\!* Davom etishingiz yoki yakunlashingiz mumkin\\.",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🏁 Yakunlash va AI tahlil", callback_data="vs_finish")],
@@ -522,7 +522,7 @@ async def vorstellen_collect(update: Update, context: ContextTypes.DEFAULT_TYPE)
             answers.append(recognized)
             preview = recognized[:150] + ("..." if len(recognized) > 150 else "")
             await update.message.reply_text(
-                f"✅ *Ovoz qabul qilindi\!*\n\n_{esc_md(preview)}_\n\nDavom eting:",
+                f"✅ *Ovoz qabul qilindi\\!*\n\n_{esc_md(preview)}_\n\nDavom eting:",
                 parse_mode="MarkdownV2",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🏁 Yakunlash va AI tahlil", callback_data="vs_finish")],
@@ -596,7 +596,7 @@ async def vorstellen_analyze(query, context: ContextTypes.DEFAULT_TYPE) -> int:
             text += f"• {esc_md(g)}\n"
         text += "\n"
 
-    text += f"🎁 *+{XP_REWARDS.get('vorstellen', 30) + score * 5} XP qo'shildi\!*"
+    text += f"🎁 *+{XP_REWARDS.get('vorstellen', 30) + score * 5} XP qo'shildi\\!*"
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("💡 Tushuntirish", callback_data="vs_tushuntirish")],
@@ -739,9 +739,9 @@ async def generate_vorstellen_pdf(query, context: ContextTypes.DEFAULT_TYPE) -> 
             filename=filename,
             caption=(
                 f"✅ *Vorstellen — {esc_md(str(analysis.get('detected_level', 'A1')))} daraja*\n\n"
-                f"📑 PDF fayl tayyor\!\n"
+                f"📑 PDF fayl tayyor\\!\n"
                 f"⭐ Yulduz: {analysis.get('yulduz', 3)}/5\n\n"
-                f"💡 Bu matnni yodlang va har kuni mashq qiling\!"
+                f"💡 Bu matnni yodlang va har kuni mashq qiling\\!"
             ),
             parse_mode="MarkdownV2",
         )
