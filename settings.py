@@ -86,23 +86,29 @@ def speed_select_keyboard():
 async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Sozlamalar menyusi"""
     query = update.callback_query
-    await query.answer()
+    if query:
+        await query.answer()
+        user_id = query.from_user.id
+    else:
+        user_id = update.effective_user.id
 
-    user_id = query.from_user.id
     db = get_db()
     user = db.get_or_create_user(user_id)
 
-    await query.edit_message_text(
+    text = (
         "⚙️ *Sozlamalar*\n\n"
         "Quyidagi sozlamalarni o'zgartiring:\n\n"
         "📊 *Daraja* \\- Joriy darajangiz\n"
         "👩 *Ovoz* \\- TTS ovozi (ayol/erkak)\n"
         "⏩ *TTS Tezlik* \\- Gapirish tezligi\n"
         "🔧 *Xatolar* \\- Xatolarni ko'rsatish/yashirish\n\n"
-        "Tanlang:",
-        parse_mode="MarkdownV2",
-        reply_markup=settings_menu_keyboard(user),
+        "Tanlang:"
     )
+    keyboard = settings_menu_keyboard(user)
+    if query:
+        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     return -1
 
 

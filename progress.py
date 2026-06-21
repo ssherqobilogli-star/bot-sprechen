@@ -36,19 +36,24 @@ def esc_md(text: str) -> str:
 async def progress_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Progress menyusini ko'rsatish"""
     query = update.callback_query
-    await query.answer()
+    if query:
+        await query.answer()
+        user_id = query.from_user.id
+    else:
+        user_id = update.effective_user.id
 
-    user_id = query.from_user.id
     db = get_db()
     stats = db.get_user_stats(user_id)
 
     if not stats:
-        await query.edit_message_text(
-            "❌ Ma'lumot topilmadi.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏠 Asosiy menu", callback_data="main_menu")],
-            ])
-        )
+        text = "❌ Ma'lumot topilmadi."
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏠 Asosiy menu", callback_data="main_menu")],
+        ])
+        if query:
+            await query.edit_message_text(text, reply_markup=keyboard)
+        else:
+            await update.message.reply_text(text, reply_markup=keyboard)
         return -1  # No specific state
 
     current_level = stats.get("current_level", "a1")
@@ -92,16 +97,16 @@ async def progress_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"📋 *Bugungi vazifalar:* {completed}/{total_missions}\n\n"
     )
 
-    await query.edit_message_text(
-        text,
-        parse_mode="MarkdownV2",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📈 Grafiklar", callback_data="progress_charts")],
-            [InlineKeyboardButton("📋 Kunlik vazifalar", callback_data="progress_missions")],
-            [InlineKeyboardButton("🎯 Level Up shartlari", callback_data="progress_levelup")],
-            [InlineKeyboardButton("🏠 Asosiy menu", callback_data="main_menu")],
-        ])
-    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📈 Grafiklar", callback_data="progress_charts")],
+        [InlineKeyboardButton("📋 Kunlik vazifalar", callback_data="progress_missions")],
+        [InlineKeyboardButton("🎯 Level Up shartlari", callback_data="progress_levelup")],
+        [InlineKeyboardButton("🏠 Asosiy menu", callback_data="main_menu")],
+    ])
+    if query:
+        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     return -1
 
 
