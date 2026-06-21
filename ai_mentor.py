@@ -112,12 +112,8 @@ AI_MENTOR_SETTINGS = 170
 
 def ai_mentor_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎯 Daraja aniqlash", callback_data="ai_level_detect")],
-        [InlineKeyboardButton("👤 O'zini tanishtirish (Vorstellen)", callback_data="ai_vorstellen")],
-        [InlineKeyboardButton("💬 Tajriba suhbati (Erfahrungen)", callback_data="ai_erfahrungen")],
-        [InlineKeyboardButton("❌ Xatolar banki", callback_data="ai_mistake_bank")],
-        [InlineKeyboardButton("🔊 Ovozli lug'at", callback_data="ai_voice_vocab")],
-        [InlineKeyboardButton("🎭 Rol o'yini (Roleplay)", callback_data="ai_roleplay")],
+        [InlineKeyboardButton("🎤 Vorstellen", callback_data="ai_vorstellen")],
+        [InlineKeyboardButton("💬 Aktiv Sprechen", callback_data="ai_voice_vocab")],
         [InlineKeyboardButton("🏠 Asosiy menu", callback_data="main_menu")],
     ])
 
@@ -127,6 +123,8 @@ async def ai_mentor_menu_handler(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     await query.edit_message_text(
         "🤖 *AI Mentor — Shaxsiy Nemis Tili Yordamchingiz*\n\n"
+        "🎤 *Vorstellen* — O'zingizni tanishtirish mashqi\n"
+        "💬 *Aktiv Sprechen* — Ovozli lug'at va gapirish mashqlari\n\n"
         "Qaysi bo'limdan boshlaysiz?",
         parse_mode="MarkdownV2",
         reply_markup=ai_mentor_keyboard(),

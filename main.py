@@ -990,44 +990,22 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     """Pastki doimiy tugmalarni qayta ishlash"""
     text = update.message.text
 
-    if text == "📚 Menyu":
-        await update.message.reply_text(
-            "🇩🇪 *Deutsch Meister PRO*\n\n*Asosiy menyu\:*",
-            parse_mode="MarkdownV2",
-            reply_markup=main_menu_keyboard(),
-        )
-        return MAIN_MENU
-
-    elif text == "📖 Kunlik so'z":
-        return await daily_word_handler(update, context)
-
-    elif text == "🤖 AI Mentor":
-        # AI Mentor menyusini ko'rsatish
+    if text == "🤖 AI Mentor":
         await update.message.reply_text(
             "🤖 *AI Mentor*\n\n"
-            "*Imkoniyatlar\:*\n\n"
-            "🎯 *Darajani aniqlash* \- 5 ta savol bilan darajangizni bilib oling\n"
-            "🎤 *Vorstellen* \- O'zingizni taqdim etish mashqi\n"
-            "💬 *Erfahrungen* \- B2/C1 mavzularida suhbatlashish\n"
-            "🔧 *Xato banki* \- Xatolaringizni saqlash va mini\-darslar\n"
-            "📚 *Ovozli lug'at* \- A1/A2/B1/B2, 20 mavzu, 25 so'z\n"
-            "🎭 *Rolli o'yinlar* \- TELC/Goethe uslubi, 20 mavzu\n\n"
+            "🎤 *Vorstellen* \- O'zingizni tanishtirish mashqi\n"
+            "💬 *Aktiv Sprechen* \- Ovozli lug'at va gapirish mashqlari\n\n"
             "*Bo'limni tanlang\:*",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎯 Darajani aniqlash", callback_data="ai_level_detect")],
                 [InlineKeyboardButton("🎤 Vorstellen", callback_data="ai_vorstellen")],
-                [InlineKeyboardButton("💬 Erfahrungen", callback_data="ai_erfahrungen")],
-                [InlineKeyboardButton("🔧 Xato banki", callback_data="ai_mistake_bank")],
-                [InlineKeyboardButton("📚 Ovozli lug'at", callback_data="ai_voice_vocab")],
-                [InlineKeyboardButton("🎭 Rolli o'yinlar", callback_data="ai_roleplay")],
-                [InlineKeyboardButton("🏠 Asosiy menyu", callback_data="main_menu")],
+                [InlineKeyboardButton("💬 Aktiv Sprechen", callback_data="ai_voice_vocab")],
             ]),
         )
         return MAIN_MENU
 
-    elif text == "📊 Progressim":
-        return await progress_menu(update, context)
+    elif text == "📖 Lug'at":
+        return await lugat_menu(update, context)
 
     elif text == "🌐 Tarjimon":
         await update.message.reply_text(
@@ -1042,9 +1020,43 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         )
         return TRANSLATOR
 
-    elif text == "ℹ️ Yordam":
-        return await help_handler(update, context)
+    elif text == "📚 Sayfa":
+        return await sayfa_menu(update, context)
 
+    elif text == "📚 Kitob Materiallar":
+        return await kitob_menu(update, context)
+
+    elif text == "📖 Kunlik so'z":
+        return await daily_word_handler(update, context)
+
+    elif text == "📊 Progressim":
+        return await progress_menu(update, context)
+
+    elif text == "⚙️ Sozlamalar":
+        return await settings_menu(update, context)
+
+    elif text == "📝 Test":
+        return await test_menu(update, context)
+
+    return MAIN_MENU
+
+
+async def test_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Test bo'limi - hozircha skelet, materiallar keyinroq qo'shiladi"""
+    text = (
+        "📝 *Test*\n\n"
+        "Bu bo'lim tez orada to'ldiriladi\.\n"
+        "Darajangiz bo'yicha testlar shu yerda chiqadi\."
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏠 Asosiy menyu", callback_data="main_menu")],
+    ])
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     return MAIN_MENU
 
 
@@ -1338,6 +1350,11 @@ def main() -> None:
     # Handlerlarni qo'shish
     application.add_handler(main_conv)
     application.add_handler(ai_mentor_conv)
+
+    # Yordam (/yordam, /help) - endi pastki menyuda tugma sifatida yo'q,
+    # lekin komanda orqali hamon ishlaydi
+    application.add_handler(CommandHandler("yordam", help_handler))
+    application.add_handler(CommandHandler("help", help_handler))
 
     # Mini App'dan kelgan ma'lumot (sendData orqali)
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, web_app_data_handler))
