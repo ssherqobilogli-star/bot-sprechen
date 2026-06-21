@@ -104,7 +104,7 @@ ADMIN_REPLY_KEYBOARD = ReplyKeyboardMarkup(
     SETTINGS_MENU, SETTINGS_VOICE, SETTINGS_SPEED, SETTINGS_LEVEL,
     # Test
     TEST_MENU, TEST_LEVEL, TEST_QUIZ, TEST_RESULT,
-) = range(40)
+) = range(38)
 
 
 # ==================== /START - Telefon raqam so'rash ====================
