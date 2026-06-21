@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 DEUTSCH MEISTER PRO - Markaziy Konfiguratsiya
-YANGILANGAN VERSION
+To'liq yangilangan versiya
 """
 
 import os
@@ -16,8 +16,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ==================== ENVIRONMENT ====================
-TOKEN = os.environ.get("BOT_TOKEN", "SIZNING_BOT_TOKENINGIZ")
+TOKEN = os.environ.get("BOT_TOKEN", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+ADMIN_IDS = [int(x.strip()) for x in os.environ.get("ADMIN_IDS", "").split(",") if x.strip()]
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 WHISPER_MODEL = "whisper-large-v3"
@@ -45,106 +46,141 @@ XP_REWARDS = {
     "vorstellen": 30,
     "vocab_test_correct": 5,
     "vocab_sprechen": 30,
-}
-
-# ==================== LEVEL UP REQUIREMENTS ====================
-LEVEL_REQUIREMENTS = {
-    "a1": {"xp": 0, "lektion": 0, "speaking_score": 0},
-    "a2": {"xp": 500, "lektion": 8, "speaking_score": 7},
-    "b1": {"xp": 1200, "lektion": 16, "speaking_score": 8},
-    "b2": {"xp": 2500, "lektion": 24, "speaking_score": 9},
-    "c1": {"xp": 4500, "lektion": 32, "speaking_score": 10},
+    "aktiv_sprechen": 35,
+    "daily_word": 15,
+    "test_complete": 40,
 }
 
 # ==================== LEVEL LABELS ====================
 LEVEL_LABELS = {
-    "a1": "🟢 A1 - Beginner",
-    "a2": "🟢 A2 - Elementary",
-    "b1": "🟡 B1 - Intermediate",
-    "b2": "🟡 B2 - Upper-Intermediate",
-    "c1": "🔵 C1 - Advanced",
-    "c2": "🔴 C2 - Mastery",
+    "a1": "A1 - Beginner",
+    "a2": "A2 - Elementary",
+    "b1": "B1 - Intermediate",
+    "b2": "B2 - Upper-Intermediate",
+    "c1": "C1 - Advanced",
 }
 
-# ==================== BOOK CONFIG ====================
-BOOK_LABELS = {
-    "motive": "📗 MOTIVE",
-    "schritte": "📙 SCHRITTE",
-    "menschen": "📕 MENSCHEN",
-    "sicher": "📗 Sicher",
-    "kompassdaf": "📙 KompassDaF",
-    "aspekte": "📕 Aspekte",
+# ==================== AKTIV SPRECHEN TOPICS (100 topics, 20 per level) ====================
+AKTIV_SPRECHEN_TOPICS = {
+    "a1": [
+        {"id": 1, "name": "Salomlashish", "german": "Begrüßung"},
+        {"id": 2, "name": "Oila", "german": "Familie"},
+        {"id": 3, "name": "Raqamlar", "german": "Zahlen"},
+        {"id": 4, "name": "Kunlar va oylar", "german": "Wochentage und Monate"},
+        {"id": 5, "name": "Ob-havo", "german": "Wetter"},
+        {"id": 6, "name": "Ranglar", "german": "Farben"},
+        {"id": 7, "name": "Taomlar", "german": "Essen und Trinken"},
+        {"id": 8, "name": "Uy hayvoni", "german": "Haustiere"},
+        {"id": 9, "name": "Maktab", "german": "Schule"},
+        {"id": 10, "name": "Kasblar", "german": "Berufe"},
+        {"id": 11, "name": "Transport", "german": "Verkehrsmittel"},
+        {"id": 12, "name": "Shahar", "german": "Stadt"},
+        {"id": 13, "name": "Uy", "german": "Zuhause"},
+        {"id": 14, "name": "Kiyimlar", "german": "Kleidung"},
+        {"id": 15, "name": "Badan", "german": "Körper"},
+        {"id": 16, "name": "Hobbylar", "german": "Hobbys"},
+        {"id": 17, "name": "Musiqa", "german": "Musik"},
+        {"id": 18, "name": "Sport", "german": "Sport"},
+        {"id": 19, "name": "Sayohat", "german": "Reisen"},
+        {"id": 20, "name": "Xarid qilish", "german": "Einkaufen"},
+    ],
+    "a2": [
+        {"id": 21, "name": "O'zini taqdim etish", "german": "Sich vorstellen"},
+        {"id": 22, "name": "Oilaviy munosabatlar", "german": "Familienbeziehungen"},
+        {"id": 23, "name": "Kundalik hayot", "german": "Tagesablauf"},
+        {"id": 24, "name": "Ta'lim", "german": "Bildung"},
+        {"id": 25, "name": "Ish joyi", "german": "Arbeitsplatz"},
+        {"id": 26, "name": "Sayohat rejalari", "german": "Reisepläne"},
+        {"id": 27, "name": "Restoran", "german": "Im Restaurant"},
+        {"id": 28, "name": "Sog'liq", "german": "Gesundheit"},
+        {"id": 29, "name": "Havo va fasl", "german": "Wetter und Jahreszeiten"},
+        {"id": 30, "name": "Xabarlar", "german": "Nachrichten"},
+        {"id": 31, "name": "Texnologiya", "german": "Technologie"},
+        {"id": 32, "name": "Madaniyat", "german": "Kultur"},
+        {"id": 33, "name": "Ta'til", "german": "Urlaub"},
+        {"id": 34, "name": "Mashina haydash", "german": "Autofahren"},
+        {"id": 35, "name": "Bank xizmatlari", "german": "Bankdienstleistungen"},
+        {"id": 36, "name": "Poytaxt va davlatlar", "german": "Hauptstädte und Länder"},
+        {"id": 37, "name": "Tabiat", "german": "Natur"},
+        {"id": 38, "name": "Hayvonlar", "german": "Tiere"},
+        {"id": 39, "name": "Oziq-ovqat", "german": "Lebensmittel"},
+        {"id": 40, "name": "Uy ishlari", "german": "Hausarbeit"},
+    ],
+    "b1": [
+        {"id": 41, "name": "Shaxsiy rivojlanish", "german": "Persönliche Entwicklung"},
+        {"id": 42, "name": "Kasbiy faoliyat", "german": "Berufliche Tätigkeit"},
+        {"id": 43, "name": "Ta'lim tizimi", "german": "Bildungssystem"},
+        {"id": 44, "name": "Sayohat tajribasi", "german": "Reiseerfahrungen"},
+        {"id": 45, "name": "Sog'liqni saqlash", "german": "Gesundheitspflege"},
+        {"id": 46, "name": "Sport turlari", "german": "Sportarten"},
+        {"id": 47, "name": "San'at va madaniyat", "german": "Kunst und Kultur"},
+        {"id": 48, "name": "Oshxona an'analari", "german": "Kulinarische Traditionen"},
+        {"id": 49, "name": "Media va axborot", "german": "Medien und Information"},
+        {"id": 50, "name": "Atrof-muhit", "german": "Umwelt"},
+        {"id": 51, "name": "Ilm-fan", "german": "Wissenschaft"},
+        {"id": 52, "name": "Tarix", "german": "Geschichte"},
+        {"id": 53, "name": "Ijtimoiy hayot", "german": "Soziales Leben"},
+        {"id": 54, "name": "Moda va uslub", "german": "Mode und Stil"},
+        {"id": 55, "name": "Xalqaro munosabatlar", "german": "Internationale Beziehungen"},
+        {"id": 56, "name": "Transport va kommunikatsiya", "german": "Verkehr und Kommunikation"},
+        {"id": 57, "name": "Muzey va teatr", "german": "Museum und Theater"},
+        {"id": 58, "name": "Mamlakatlar taqqoslash", "german": "Ländervergleich"},
+        {"id": 59, "name": "Kelajak rejalari", "german": "Zukunftspläne"},
+        {"id": 60, "name": "Xotiralar", "german": "Erinnerungen"},
+    ],
+    "b2": [
+        {"id": 61, "name": "Global muammolar", "german": "Globale Probleme"},
+        {"id": 62, "name": "Iqtisodiyot", "german": "Wirtschaft"},
+        {"id": 63, "name": "Siyosat va jamiyat", "german": "Politik und Gesellschaft"},
+        {"id": 64, "name": "Psixologiya", "german": "Psychologie"},
+        {"id": 65, "name": "Filosofiya", "german": "Philosophie"},
+        {"id": 66, "name": "Arxitektura", "german": "Architektur"},
+        {"id": 67, "name": "Etnografiya", "german": "Ethnografie"},
+        {"id": 68, "name": "Tibbiyot", "german": "Medizin"},
+        {"id": 69, "name": "Qonunchilik", "german": "Gesetzgebung"},
+        {"id": 70, "name": "Menejment", "german": "Management"},
+        {"id": 71, "name": "Marketing", "german": "Marketing"},
+        {"id": 72, "name": "Ta'lim siyosati", "german": "Bildungspolitik"},
+        {"id": 73, "name": "Muhojirlik", "german": "Migration"},
+        {"id": 74, "name": "Energetika", "german": "Energie"},
+        {"id": 75, "name": "Aloqa texnologiyalari", "german": "Kommunikationstechnologie"},
+        {"id": 76, "name": "Aviatsiya", "german": "Luftfahrt"},
+        {"id": 77, "name": "Me'morchilik", "german": "Baukunst"},
+        {"id": 78, "name": "Qishloq xo'jaligi", "german": "Landwirtschaft"},
+        {"id": 79, "name": "Sanoat", "german": "Industrie"},
+        {"id": 80, "name": "T_ijorat", "german": "Handel"},
+    ],
+    "c1": [
+        {"id": 81, "name": "Diplomatiya", "german": "Diplomatie"},
+        {"id": 82, "name": "Strategik rejalashtirish", "german": "Strategische Planung"},
+        {"id": 83, "name": "Neyrofan va sun'iy intelekt", "german": "Neurowissenschaft und KI"},
+        {"id": 84, "name": "Kosmik tadqiqotlar", "german": "Raumfahrtforschung"},
+        {"id": 85, "name": "Genetika", "german": "Genetik"},
+        {"id": 86, "name": "Kibernetika xavfsizligi", "german": "Cybersicherheit"},
+        {"id": 87, "name": "Ijtimoiy tarmoqlar ta'siri", "german": "Social Media Einfluss"},
+        {"id": 88, "name": "Globalizatsiya ta'siri", "german": "Globalisierungsauswirkungen"},
+        {"id": 89, "name": "Barqaror rivojlanish", "german": "Nachhaltige Entwicklung"},
+        {"id": 90, "name": "Bioxilma-xillik", "german": "Biodiversität"},
+        {"id": 91, "name": "Klimat o'zgarishi", "german": "Klimawandel"},
+        {"id": 92, "name": "Startap ekotizimi", "german": "Startup-Ökosystem"},
+        {"id": 93, "name": "Zamonaviy san'at", "german": "Zeitgenössische Kunst"},
+        {"id": 94, "name": "Interkultural dialog", "german": "Interkultureller Dialog"},
+        {"id": 95, "name": "Ta'lim inovatsiyalari", "german": "Bildungsinnovationen"},
+        {"id": 96, "name": "Tibbiyot etikasi", "german": "Medizinethik"},
+        {"id": 97, "name": "Huquqiy tizimlar taqqoslash", "german": "Rechtssystemvergleich"},
+        {"id": 98, "name": "Zamonaviy adabiyot", "german": "Moderne Literatur"},
+        {"id": 99, "name": "Mashhur shaxslar", "german": "Berühmte Persönlichkeiten"},
+        {"id": 100, "name": "Kelajat texnologiyalari", "german": "Zukunftstechnologien"},
+    ],
 }
 
-LEVEL_BOOKS = {
-    "a1": ["motive", "schritte", "menschen"],
-    "a2": ["motive", "schritte", "menschen"],
-    "b1": ["motive", "schritte", "menschen"],
-    "b2": ["sicher", "kompassdaf", "aspekte"],
-    "c1": ["sicher", "kompassdaf", "aspekte"],
-}
-
-BOOK_LEKTIONS = {
-    "a1_motive": (1, 8),
-    "a1_schritte": (1, 14),
-    "a1_menschen": (1, 24),
-    "a2_motive": (9, 18),
-    "a2_schritte": (1, 14),
-    "a2_menschen": (1, 24),
-    "b1_motive": (19, 30),
-    "b1_schritte": (1, 14),
-    "b1_menschen": (1, 24),
-    "b2_sicher": (1, 12),
-    "b2_kompassdaf": (1, 10),
-    "b2_aspekte": (1, 10),
-    "c1_sicher": (1, 12),
-    "c1_kompassdaf": (1, 10),
-    "c1_aspekte": (1, 10),
-}
-
-# ==================== AI MENTOR TOPICS ====================
-LEVEL_DETECTION_QUESTIONS = [
-    {
-        "question": "🎯 *Savol 1/5*\n\nQuyidagi gapni nemischa tarjima qiling:\n\n*'Men 25 yoshdaman va Germaniyada yashayman'*",
-        "check": lambda ans: any(w in ans.lower() for w in ["ich bin", "jahre alt", "wohne", "lebe", "deutschland", "in deutschland"]),
-        "hints": ["ich bin", "jahre alt", "wohne", "Deutschland"],
-    },
-    {
-        "question": "🎯 *Savol 2/5*\n\nQaysi variant to'g'ri?\n\n*'Ich ___ ein Student.'*",
-        "check": lambda ans: "bin" in ans.lower(),
-        "hints": ["bin", "bist", "ist", "sind"],
-    },
-    {
-        "question": "🎯 *Savol 3/5*\n\nNemis tilida 'Men kechqurun kitob o'qiyman' ni yozing:",
-        "check": lambda ans: any(w in ans.lower() for w in ["abends", "lese", "buch", "lese ein buch"]),
-        "hints": ["Abends", "lese", "ein Buch"],
-    },
-    {
-        "question": "🎯 *Savol 4/5*\n\nQuyidagi gapni to'ldiring:\n\n*'Gestern ___ ich ins Kino gegangen.'*",
-        "check": lambda ans: "bin" in ans.lower() or "war" in ans.lower(),
-        "hints": ["war", "bin", "habe", "ist"],
-    },
-    {
-        "question": "🎯 *Savol 5/5*\n\nKonjunktiv II shaklida gap tuzing:\n\n*'Agar vaqtim bo'lsa, Germaniyaga borardim.'*",
-        "check": lambda ans: any(w in ans.lower() for w in ["wenn", "hätte", "würde", "fahren", "gehen"]),
-        "hints": ["Wenn ich Zeit hätte", "würde"],
-    },
+# ==================== VORSTELLEN QUESTIONS ====================
+VORSTELLEN_QUESTIONS = [
+    {"num": 1, "de": "Stellen Sie sich vor! Wie heißen Sie und wie alt sind Sie?", "uz": "O'zingizni taqdim eting! Ismingiz va yoshingiz?", "topic": "Name und Alter"},
+    {"num": 2, "de": "Woher kommen Sie? Erzählen Sie von Ihrem Heimatland.", "uz": "Qayerdansiz? Vataningiz haqida gapiring.", "topic": "Herkunft"},
+    {"num": 3, "de": "Wo wohnen Sie? Beschreiben Sie Ihre Wohnung/Ihr Haus.", "uz": "Qayerda yashaysiz? Uy/apartamentingizni tavsiflang.", "topic": "Wohnort"},
+    {"num": 4, "de": "Erzählen Sie von Ihrer Familie.", "uz": "Oilangiz haqida gapiring.", "topic": "Familie"},
+    {"num": 5, "de": "Wo haben Sie Deutsch gelernt? Wie lange lernen Sie schon?", "uz": "Qayerda nemis tilini o'rgandingiz? Qancha vaqtdan beri o'rganasiz?", "topic": "Deutsch lernen"},
+    {"num": 6, "de": "Was machen Sie? (Studium, Beruf, Schule...)", "uz": "Nima ish qilasiz? (O'qish, ish, maktab...)", "topic": "Studium/Beruf"},
+    {"num": 7, "de": "Welche Sprachen sprechen Sie? Warum lernen Sie Deutsch?", "uz": "Qaysi tillarni bilasiz? Nima uchun nemis tilini o'rganasiz?", "topic": "Sprachen"},
 ]
-
-VORSTELLEN_PROMPTS = {
-    "intro": "Stellen Sie sich vor! Erzählen Sie über sich.",
-    "followup": "Sehr gut! Erzählen Sie mehr über Ihre Familie und Ihren Beruf.",
-}
-
-ERFAHRUNGEN_TOPICS = {
-    "arbeit": {"name": "💼 Arbeit und Beruf", "easy": "Erzählen Sie von Ihrem Beruf.", "medium": "Was gefällt Ihnen an Ihrer Arbeit?", "hard": "Wie stellen Sie sich Ihre berufliche Zukunft vor?"},
-    "reisen": {"name": "✈️ Reisen und Urlaub", "easy": "Erzählen Sie von Ihrem letzten Urlaub.", "medium": "Welche Reiseziele möchten Sie besuchen?", "hard": "Was bedeutet Reisen für Sie persönlich?"},
-    "bildung": {"name": "🎓 Bildung und Lernen", "easy": "Erzählen Sie von Ihrer Schule.", "medium": "Warum lernen Sie Deutsch?", "hard": "Wie verändert sich das Bildungssystem?"},
-    "gesellschaft": {"name": "🏙️ Gesellschaft und Kultur", "easy": "Erzählen Sie von Ihrem Land.", "medium": "Welche kulturellen Unterschiede gibt es?", "hard": "Wie beeinflusst Globalisierung die Kultur?"},
-    "umwelt": {"name": "🌍 Umwelt und Nachhaltigkeit", "easy": "Was machen Sie für die Umwelt?", "medium": "Welche Umweltprobleme gibt es?", "hard": "Wie kann man Nachhaltigkeit fördern?"},
-    "technologie": {"name": "💻 Technologie und Digitalisierung", "easy": "Welche Technologien nutzen Sie?", "medium": "Wie verändert Technologie unser Leben?", "hard": "Ist künstliche Intelligenz gefährlich?"},
-    "gesundheit": {"name": "🏥 Gesundheit und Sport", "easy": "Wie halten Sie sich fit?", "medium": "Was ist wichtig für Gesundheit?", "hard": "Wie sollte das Gesundheitssystem verbessert werden?"},
-    "familie": {"name": "👨‍👩‍👧 Familie und Beziehungen", "easy": "Erzählen Sie von Ihrer Familie.", "medium": "Was ist wichtig in einer Beziehung?", "hard": "Wie verändert sich die Familie in der modernen Gesellschaft?"},
-    "kunst": {"name": "🎨 Kunst und Literatur", "easy": "Welche Kunst mögen Sie?", "medium": "Welches Buch haben Sie zuletzt gelesen?", "hard": "Welche Rolle spielt Kunst in der Gesellschaft?"},
-    "politik": {"name": "🏛️ Politik und Wirtschaft", "easy": "Was interessiert Sie an Politik?", "medium": "Wie beeinflusst Politik das tägliche Leben?", "hard": "Welche wirtschaftlichen Herausforderungen gibt es?"},
-}

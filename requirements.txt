@@ -1,25 +1,6 @@
-# DEUTSCH MEISTER PRO - Dependencies
-# Python 3.10+
-
-# Core
-python-telegram-bot==21.9
-httpx==0.27.2
-
-# Database
-# sqlite3 (built-in)
-
-# Visualization
-matplotlib==3.9.0
-numpy==2.0.0
-
-# TTS (Edge TTS)
-edge-tts==6.1.19
-# Zaxira: gTTS
-gTTS==2.5.3
-
-# Environment
-python-dotenv==1.0.1
-
-# PDF generation
-reportlab==4.4.10
-Pillow==10.4.0
+python-telegram-bot>=21.0
+httpx>=0.27.0
+edge-tts>=6.1.0
+reportlab>=4.0.0
+Pillow>=10.0.0
+matplotlib>=3.7.0

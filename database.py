@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 DEUTSCH MEISTER PRO - SQLite Ma'lumotlar Bazasi
-YANGILANGAN VERSION - Lug'at, Sayfa, Kitob Materiallar jadvallari bilan
+To'liq yangilangan versiya - Barcha jadvallar bilan
 """
 
 import sqlite3
@@ -11,7 +11,7 @@ import datetime
 from typing import Optional, List, Dict, Any, Tuple
 from contextlib import contextmanager
 
-from config import logger, DATABASE_PATH, XP_REWARDS, LEVEL_REQUIREMENTS
+from config import logger, DATABASE_PATH, XP_REWARDS
 
 
 class Database:
@@ -46,6 +46,7 @@ class Database:
                     username TEXT,
                     first_name TEXT,
                     last_name TEXT,
+                    phone TEXT,
                     current_level TEXT DEFAULT 'a1',
                     target_level TEXT DEFAULT 'c1',
                     total_xp INTEGER DEFAULT 0,
@@ -57,10 +58,8 @@ class Database:
                     show_mistakes INTEGER DEFAULT 1,
                     ai_difficulty TEXT DEFAULT 'adaptive',
                     speaking_score REAL DEFAULT 0.0,
-                    current_lektion INTEGER DEFAULT 1,
                     total_conversations INTEGER DEFAULT 0,
-                    phone TEXT,
-                    channel_subscribed INTEGER DEFAULT 0
+                    is_admin INTEGER DEFAULT 0
                 )
             """)
 
@@ -123,9 +122,23 @@ class Database:
                 )
             """)
 
-            # ==================== YANGI JADVALLAR ====================
+            # 6. Admin murojaatlari
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS admin_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    user_name TEXT,
+                    request_type TEXT,
+                    message TEXT,
+                    status TEXT DEFAULT 'pending',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    resolved_at TEXT,
+                    admin_reply TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
 
-            # 6. Lug'at kitoblari
+            # 7. Lug'at kitoblari
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS lugat_books (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,7 +149,7 @@ class Database:
                 )
             """)
 
-            # 7. Lug'at bo'limlari (chapters)
+            # 8. Lug'at bo'limlari
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS lugat_chapters (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,7 +162,7 @@ class Database:
                 )
             """)
 
-            # 8. Lug'at so'zlari
+            # 9. Lug'at so'zlari
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS lugat_words (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -164,7 +177,7 @@ class Database:
                 )
             """)
 
-            # 9. Sayfa materiallari
+            # 10. Sayfa materiallari
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS sayfa_materials (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,7 +191,7 @@ class Database:
                 )
             """)
 
-            # 10. Kitob materiallari (Kitob Materiallar bo'limi)
+            # 11. Kitob materiallari
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS kitob_books (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,7 +204,7 @@ class Database:
                 )
             """)
 
-            # 11. Kitob materiallari fayllari
+            # 12. Kitob materiallari fayllari
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS kitob_materials (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -206,36 +219,111 @@ class Database:
                 )
             """)
 
+            # 13. Aktiv Sprechen - Mavzular
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS aktiv_topics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    level TEXT NOT NULL,
+                    topic_id INTEGER,
+                    name_uz TEXT,
+                    name_de TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # 14. Aktiv Sprechen - Lugatlar
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS aktiv_vocab (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER,
+                    level TEXT,
+                    german TEXT NOT NULL,
+                    uzbek TEXT NOT NULL,
+                    plural TEXT,
+                    article TEXT,
+                    example_de TEXT,
+                    example_uz TEXT,
+                    FOREIGN KEY (topic_id) REFERENCES aktiv_topics(id)
+                )
+            """)
+
+            # 15. Aktiv Sprechen - Hikoyalar
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS aktiv_stories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER,
+                    level TEXT,
+                    title_de TEXT,
+                    title_uz TEXT,
+                    story_de TEXT,
+                    story_uz TEXT,
+                    grammar_notes TEXT,
+                    FOREIGN KEY (topic_id) REFERENCES aktiv_topics(id)
+                )
+            """)
+
+            # 16. Aktiv Sprechen - Grammatika
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS aktiv_grammar (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER,
+                    level TEXT,
+                    rule_name TEXT,
+                    rule_explanation TEXT,
+                    examples TEXT,
+                    FOREIGN KEY (topic_id) REFERENCES aktiv_topics(id)
+                )
+            """)
+
+            # 17. Test natijalari
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS test_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    level TEXT,
+                    score INTEGER,
+                    total_questions INTEGER,
+                    correct_answers INTEGER,
+                    time_taken INTEGER,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+
+            # 18. Xabar yuborish logi
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS broadcast_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_id INTEGER,
+                    message TEXT,
+                    recipient_count INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
             conn.commit()
             logger.info("Barcha jadvallar yaratildi!")
 
-        self._seed_default_lugat_books()
+        self._seed_default_data()
 
-    def _seed_default_lugat_books(self):
-        """Lug'at uchun standart kitoblarni bir martalik (idempotent) urug'laydi.
-        A1/A2/B1 -> Motive/Schritte/Menschen
-        B2/C1    -> Sicher/KompassDaF/Aspekte
-        Har bir daraja+kitob - alohida, mustaqil DB qatori (bittasini
-        to'ldirish boshqasiga ta'sir qilmaydi)."""
-        default_books = {
-            "a1": ["Motive", "Schritte", "Menschen"],
-            "a2": ["Motive", "Schritte", "Menschen"],
-            "b1": ["Motive", "Schritte", "Menschen"],
-            "b2": ["Sicher", "KompassDaF", "Aspekte"],
-            "c1": ["Sicher", "KompassDaF", "Aspekte"],
-        }
+    def _seed_default_data(self):
+        """Standart ma'lumotlarni kiritish"""
+        from config import AKTIV_SPRECHEN_TOPICS
+
         with self._connect() as conn:
             cursor = conn.cursor()
-            for level, names in default_books.items():
-                cursor.execute("SELECT COUNT(*) as c FROM lugat_books WHERE level = ?", (level,))
-                if cursor.fetchone()["c"] > 0:
-                    continue  # bu daraja uchun kitoblar allaqachon mavjud
-                for name in names:
-                    cursor.execute(
-                        "INSERT INTO lugat_books (level, name) VALUES (?, ?)",
-                        (level, name),
-                    )
-            conn.commit()
+
+            # Aktiv Sprechen mavzularini tekshirish
+            cursor.execute("SELECT COUNT(*) as c FROM aktiv_topics")
+            if cursor.fetchone()["c"] == 0:
+                for level, topics in AKTIV_SPRECHEN_TOPICS.items():
+                    for topic in topics:
+                        cursor.execute(
+                            "INSERT INTO aktiv_topics (level, topic_id, name_uz, name_de) VALUES (?, ?, ?, ?)",
+                            (level, topic["id"], topic["name"], topic["german"])
+                        )
+                conn.commit()
+                logger.info(f"Aktiv Sprechen: {sum(len(t) for t in AKTIV_SPRECHEN_TOPICS.values())} ta mavzu qo'shildi")
 
     # ==================== USERS ====================
 
@@ -274,7 +362,25 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else {}
 
-    # ==================== XP ====================
+    def get_all_users(self, limit: int = 100, offset: int = 0):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users ORDER BY joined_at DESC LIMIT ? OFFSET ?", (limit, offset))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_users_count(self):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) as count FROM users")
+            return cursor.fetchone()["count"]
+
+    def save_phone(self, user_id: int, phone: str):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
+            conn.commit()
+
+    # ==================== XP & PROGRESS ====================
 
     def add_xp(self, user_id: int, amount: int, activity_type: str, detail: str = ""):
         with self._connect() as conn:
@@ -290,6 +396,19 @@ class Database:
             cursor.execute("SELECT total_xp FROM users WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
             return row[0] if row else 0
+
+    def get_progress_history(self, user_id: int, limit: int = 50):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM progress WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", (user_id, limit))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_level_stats(self):
+        """Darajalar bo'yicha statistika"""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT current_level, COUNT(*) as count FROM users GROUP BY current_level")
+            return {row["current_level"]: row["count"] for row in cursor.fetchall()}
 
     # ==================== MISTAKES ====================
 
@@ -310,13 +429,6 @@ class Database:
             """, (user_id, 1 if mastered else 0, limit))
             return [dict(row) for row in cursor.fetchall()]
 
-    def get_mistake_by_id(self, mistake_id: int):
-        with self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM mistakes WHERE id = ?", (mistake_id,))
-            row = cursor.fetchone()
-            return dict(row) if row else None
-
     def get_mistake_stats(self, user_id: int):
         with self._connect() as conn:
             cursor = conn.cursor()
@@ -332,13 +444,6 @@ class Database:
         with self._connect() as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE mistakes SET mastered = 1, reviewed_at = ? WHERE id = ?",
-                           (datetime.datetime.now().isoformat(), mistake_id))
-            conn.commit()
-
-    def review_mistake(self, mistake_id: int):
-        with self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE mistakes SET review_count = review_count + 1, reviewed_at = ? WHERE id = ?",
                            (datetime.datetime.now().isoformat(), mistake_id))
             conn.commit()
 
@@ -366,15 +471,47 @@ class Database:
                   json.dumps(word.get("sinonimlar", [])), today))
             conn.commit()
 
-    # ==================== LUG'AT BOOKS ====================
+    # ==================== ADMIN REQUESTS ====================
 
-    def add_lugat_book(self, level: str, name: str, description: str = "") -> int:
+    def add_request(self, user_id: int, user_name: str, request_type: str, message: str):
         with self._connect() as conn:
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO lugat_books (level, name, description) VALUES (?, ?, ?)",
-                           (level, name, description))
+            cursor.execute("""
+                INSERT INTO admin_requests (user_id, user_name, request_type, message)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, user_name, request_type, message))
             conn.commit()
             return cursor.lastrowid
+
+    def get_requests(self, status: str = None, limit: int = 50):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            if status:
+                cursor.execute("SELECT * FROM admin_requests WHERE status = ? ORDER BY created_at DESC LIMIT ?", (status, limit))
+            else:
+                cursor.execute("SELECT * FROM admin_requests ORDER BY created_at DESC LIMIT ?", (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def update_request_status(self, request_id: int, status: str, admin_reply: str = None):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            if admin_reply:
+                cursor.execute("UPDATE admin_requests SET status = ?, resolved_at = ?, admin_reply = ? WHERE id = ?",
+                               (status, datetime.datetime.now().isoformat(), admin_reply, request_id))
+            else:
+                cursor.execute("UPDATE admin_requests SET status = ? WHERE id = ?", (status, request_id))
+            conn.commit()
+
+    # ==================== BROADCAST ====================
+
+    def log_broadcast(self, admin_id: int, message: str, recipient_count: int):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO broadcast_log (admin_id, message, recipient_count) VALUES (?, ?, ?)",
+                           (admin_id, message, recipient_count))
+            conn.commit()
+
+    # ==================== LUG'AT ====================
 
     def get_lugat_books(self, level: str):
         with self._connect() as conn:
@@ -389,16 +526,6 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    # ==================== LUG'AT CHAPTERS ====================
-
-    def add_lugat_chapter(self, book_id: int, name: str, description: str = "", order_num: int = 0) -> int:
-        with self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO lugat_chapters (book_id, name, description, order_num) VALUES (?, ?, ?, ?)",
-                           (book_id, name, description, order_num))
-            conn.commit()
-            return cursor.lastrowid
-
     def get_lugat_chapters(self, book_id: int):
         with self._connect() as conn:
             cursor = conn.cursor()
@@ -412,34 +539,13 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    # ==================== LUG'AT WORDS ====================
-
-    def add_lugat_word(self, chapter_id: int, german: str, uzbek: str, izoh: str = "", sinonimlar: str = "", order_num: int = 0):
-        with self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO lugat_words (chapter_id, german, uzbek, izoh, sinonimlar, order_num)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (chapter_id, german, uzbek, izoh, sinonimlar, order_num))
-            conn.commit()
-
     def get_lugat_words(self, chapter_id: int):
         with self._connect() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM lugat_words WHERE chapter_id = ? ORDER BY order_num", (chapter_id,))
             return [dict(row) for row in cursor.fetchall()]
 
-    # ==================== SAYFA MATERIALS ====================
-
-    def add_sayfa_material(self, book_key: str, name: str, description: str = "", pdf_path: str = "", audio_path: str = "", order_num: int = 0) -> int:
-        with self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO sayfa_materials (book_key, name, description, pdf_path, audio_path, order_num)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (book_key, name, description, pdf_path, audio_path, order_num))
-            conn.commit()
-            return cursor.lastrowid
+    # ==================== SAYFA ====================
 
     def get_sayfa_materials(self, book_key: str):
         with self._connect() as conn:
@@ -454,17 +560,7 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    # ==================== KITOB BOOKS ====================
-
-    def add_kitob_book(self, level: str, name: str, description: str = "", author: str = "", cover_image: str = "") -> int:
-        with self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO kitob_books (level, name, description, author, cover_image)
-                VALUES (?, ?, ?, ?, ?)
-            """, (level, name, description, author, cover_image))
-            conn.commit()
-            return cursor.lastrowid
+    # ==================== KITOB ====================
 
     def get_kitob_books(self, level: str):
         with self._connect() as conn:
@@ -479,18 +575,6 @@ class Database:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    # ==================== KITOB MATERIALS ====================
-
-    def add_kitob_material(self, book_id: int, name: str, file_path: str, description: str = "", type: str = "pdf", order_num: int = 0) -> int:
-        with self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO kitob_materials (book_id, name, description, file_path, type, order_num)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (book_id, name, description, file_path, type, order_num))
-            conn.commit()
-            return cursor.lastrowid
-
     def get_kitob_materials(self, book_id: int):
         with self._connect() as conn:
             cursor = conn.cursor()
@@ -503,6 +587,57 @@ class Database:
             cursor.execute("SELECT * FROM kitob_materials WHERE id = ?", (mat_id,))
             row = cursor.fetchone()
             return dict(row) if row else None
+
+    # ==================== AKTIV SPRECHEN ====================
+
+    def get_aktiv_topics(self, level: str):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM aktiv_topics WHERE level = ? ORDER BY topic_id", (level,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_aktiv_topic_by_id(self, topic_id: int):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM aktiv_topics WHERE id = ?", (topic_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_aktiv_vocab(self, topic_id: int, limit: int = 25):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM aktiv_vocab WHERE topic_id = ? LIMIT ?", (topic_id, limit))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_aktiv_story(self, topic_id: int):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM aktiv_stories WHERE topic_id = ?", (topic_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_aktiv_grammar(self, topic_id: int):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM aktiv_grammar WHERE topic_id = ?", (topic_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    # ==================== TEST ====================
+
+    def save_test_result(self, user_id: int, level: str, score: int, total_questions: int, correct: int, time_taken: int):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO test_results (user_id, level, score, total_questions, correct_answers, time_taken)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, level, score, total_questions, correct, time_taken))
+            conn.commit()
+
+    def get_test_results(self, user_id: int, limit: int = 10):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM test_results WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", (user_id, limit))
+            return [dict(row) for row in cursor.fetchall()]
 
 
 # Singleton
