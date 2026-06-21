@@ -391,31 +391,73 @@ def _vorstellen_main_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-async def vorstellen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Vorstellen bo'limi — asosiy menyu"""
-    query = update.callback_query
-    await query.answer()
+VORSTELLEN_CARD_PATH = os.path.join(os.path.dirname(__file__), "vorstellen_card.jpg")
 
+
+async def _vorstellen_show_card_and_prompt(query_or_message, context, chat_id, user_id):
+    """Vorstellen boshlanishi: rasm + 10 daqiqa tayyorgarlik xabari.
+    Holatni tozalaydi va javob yig'ish rejimini yoqadi."""
     try:
         from database import get_db
         db = get_db()
-        user = db.get_or_create_user(query.from_user.id)
+        user = db.get_or_create_user(user_id)
         level = user.get("current_level", "a1")
     except Exception:
         level = "a1"
 
     context.user_data["vs_level"] = level
+    context.user_data["vs_answer_parts"] = []
+    context.user_data["vs_analysis"] = None
 
-    await query.edit_message_text(
-        f"👤 *O'zini Tanishtirish — Vorstellen*\n\n"
-        f"📊 Darajangiz: *{level.upper()}*\n\n"
-        f"🎯 *Goethe/TELC imtihon uslubida 7 ta savol\\.*\n"
-        f"Har biriga matn yoki ovoz bilan javob berasiz\\.\n"
-        f"Oxirida AI sizni tahlil qilib, mukammal PDF tayyorlaydi\\!\n\n"
-        f"Quyidagilardan birini tanlang\\:",
+    try:
+        with open(VORSTELLEN_CARD_PATH, "rb") as img:
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=img,
+                caption=(
+                    "🎤 *Vorstellen — O'zingizni tanishtiring*\n\n"
+                    "Yuqoridagi savollarga tayanib, o'zingiz haqingizda gapirib bering\\."
+                ),
+                parse_mode="MarkdownV2",
+            )
+    except Exception as e:
+        logger.warning(f"Vorstellen rasm yuborilmadi: {e}")
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "⏱️ *Sizga 10 daqiqa vaqt berildi\\. Tayyorlaning\\!*\n\n"
+            "📝 Matn yozing YOKI 🎙️ ovozli xabar yuboring\n"
+            "_\\(bir nechta xabar yuborsangiz ham bo'ladi — hammasi birlashtiriladi\\)_\n\n"
+            "Tayyor bo'lganingizda pastdagi tugmani bosing\\:"
+        ),
         parse_mode="MarkdownV2",
-        reply_markup=_vorstellen_main_keyboard(),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏁 Yakunlash va AI tahlil", callback_data="vorstellen_finish")],
+        ]),
     )
+
+
+async def vorstellen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Vorstellen bo'limi — to'g'ridan-to'g'ri rasm + 10 daqiqa bilan boshlanadi"""
+    query = update.callback_query
+    await query.answer()
+    await _vorstellen_show_card_and_prompt(query, context, query.message.chat_id, query.from_user.id)
+    return VORSTELLEN_START
+
+
+async def vorstellen_start_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Vorstellen mashqini qaytadan boshlash ('Qayta boshlash' tugmasidan)"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        chat_id = query.message.chat_id
+        user_id = query.from_user.id
+    else:
+        chat_id = update.message.chat_id
+        user_id = update.effective_user.id
+
+    await _vorstellen_show_card_and_prompt(query, context, chat_id, user_id)
     return VORSTELLEN_START
 
 
@@ -474,129 +516,37 @@ async def vorstellen_template_show(update: Update, context: ContextTypes.DEFAULT
     return VORSTELLEN_START
 
 
-async def vorstellen_start_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Vorstellen mashqini boshlash — 1-savoldan boshlaydi"""
-    query = update.callback_query
-    if query:
-        await query.answer()
-
-    level = context.user_data.get("vs_level", "a1")
-
-    # Holatni butunlay tozalash
-    context.user_data["vs_answers"] = {}        # {1: {"text":..., "voice": bool}, ...}
-    context.user_data["vs_voice_parts"] = {}     # {1: ["...", "..."], ...} — qisman ovoz qismlari
-    context.user_data["vs_voice_count"] = {}     # {1: 2, ...}
-    context.user_data["vs_current_q"] = 1
-    context.user_data["vs_analysis"] = None
-    context.user_data["vs_level"] = level
-
-    await _show_vorstellen_question(query or update.message, context, 1)
-    return VORSTELLEN_START
-
-
-async def _show_vorstellen_question(obj, context, q_num: int):
-    """q_num — 1..7 savolni ko'rsatadi"""
-    savol = VORSTELLEN_SAVOLLAR[q_num - 1]
-    text = (
-        f"🎤 *Vorstellen — Savol {q_num}/7*\n\n"
-        f"🇩🇪 *{esc_md(savol['nemis'])}*\n\n"
-        f"🇺🇿 _{esc_md(savol['uzbek'])}_\n\n"
-        f"📝 Matn yozing YOKI 🎙️ ovozli xabar yuboring\n"
-        f"_\\(bitta savolga 3 martagacha ovoz yuborishingiz mumkin\\)_"
-    )
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⏭️ O'tkazib yuborish", callback_data=f"vorstellen_skip_{q_num}")],
-        [InlineKeyboardButton("🏁 Yakunlash va tahlil", callback_data="vorstellen_finish")],
-    ])
-
-    if hasattr(obj, "edit_message_text"):
-        try:
-            await obj.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
-        except Exception:
-            # Agar edit qilib bo'lmasa (masalan ovoz xabaridan keyin) — yangi xabar
-            chat = obj.message if hasattr(obj, "message") else obj
-            await chat.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
-    else:
-        await obj.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
-
-
-def _merge_voice_parts(context, q_num: int):
-    """Bitta savol uchun to'plangan barcha ovoz qismlarini birlashtiradi"""
-    parts_map = context.user_data.get("vs_voice_parts", {})
-    parts = parts_map.get(q_num, [])
-    if not parts:
-        return
-    full_text = " ".join(parts)
-    answers = context.user_data.setdefault("vs_answers", {})
-    if q_num in answers and answers[q_num].get("text"):
-        answers[q_num]["text"] = answers[q_num]["text"] + " " + full_text
-    else:
-        answers[q_num] = {"text": full_text, "voice": True}
-    parts_map[q_num] = []
-
-
 async def vorstellen_process_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Vorstellen jarayonini boshqarish:
-    — Matnli javob (har bir savol uchun)
-    — Ovozli javob (har bir savolga 3 martagacha)
-    — Boshqaruv tugmalari: skip, next, finish
+    Vorstellen javobini yig'ish (bitta umumiy javob):
+    — Matn yuborilsa — qo'shiladi
+    — Ovoz yuborilsa — Whisper orqali tanib olinadi va qo'shiladi
+    — 'Yakunlash' tugmasi bosilsa — AI tahlilga o'tiladi
     """
-    current_q = context.user_data.get("vs_current_q", 1)
+    finish_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏁 Yakunlash va AI tahlil", callback_data="vorstellen_finish")],
+    ])
 
-    # ── CALLBACK TUGMALAR ──────────────────────────────────────────────
     if update.callback_query:
         query = update.callback_query
         await query.answer()
-        data = query.data
-
-        if data.startswith("vorstellen_skip_"):
-            q_num = int(data.split("_")[-1])
-            # Agar shu savol uchun ovoz qismlari bo'lsa — birlashtiramiz, aks holda bo'sh deb belgilaymiz
-            _merge_voice_parts(context, q_num)
-            answers = context.user_data.setdefault("vs_answers", {})
-            if q_num not in answers:
-                answers[q_num] = {"text": "", "voice": False}
-
-            next_q = q_num + 1
-            context.user_data["vs_current_q"] = next_q
-            if next_q > 7:
-                return await _vorstellen_final_result(query, context)
-            await _show_vorstellen_question(query, context, next_q)
-            return VORSTELLEN_START
-
-        if data.startswith("vorstellen_next_"):
-            q_num = int(data.split("_")[-1])
-            _merge_voice_parts(context, q_num)
-            next_q = q_num + 1
-            context.user_data["vs_current_q"] = next_q
-            if next_q > 7:
-                return await _vorstellen_final_result(query, context)
-            await _show_vorstellen_question(query, context, next_q)
-            return VORSTELLEN_START
-
-        if data == "vorstellen_finish":
-            _merge_voice_parts(context, current_q)
+        if query.data == "vorstellen_finish":
             return await _vorstellen_final_result(query, context)
-
         return VORSTELLEN_START
+
+    parts = context.user_data.setdefault("vs_answer_parts", [])
 
     # ── MATNLI JAVOB ─────────────────────────────────────────────────────
     if update.message and update.message.text:
         user_text = update.message.text.strip()
         if not user_text:
             return VORSTELLEN_START
-
-        answers = context.user_data.setdefault("vs_answers", {})
-        answers[current_q] = {"text": user_text, "voice": False}
-
-        next_q = current_q + 1
-        context.user_data["vs_current_q"] = next_q
-
-        if next_q > 7:
-            return await _vorstellen_final_result(update.message, context)
-
-        await _show_vorstellen_question(update.message, context, next_q)
+        parts.append(user_text)
+        await update.message.reply_text(
+            "✅ *Qabul qilindi\\!* Davom etishingiz yoki yakunlashingiz mumkin\\.",
+            parse_mode="MarkdownV2",
+            reply_markup=finish_keyboard,
+        )
         return VORSTELLEN_START
 
     # ── OVOZLI JAVOB ─────────────────────────────────────────────────────
@@ -616,40 +566,17 @@ async def vorstellen_process_new(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text(
                 "⚠️ Ovozni tushuna olmadim\\. Yana urinib ko'ring yoki matn yozing\\.",
                 parse_mode="MarkdownV2",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("⏭️ O'tkazib yuborish", callback_data=f"vorstellen_skip_{current_q}")],
-                    [InlineKeyboardButton("🏁 Yakunlash", callback_data="vorstellen_finish")],
-                ]),
+                reply_markup=finish_keyboard,
             )
             return VORSTELLEN_START
 
-        # Ovoz sanog'i va qismlarini saqlash
-        vc = context.user_data.setdefault("vs_voice_count", {})
-        count = vc.get(current_q, 0) + 1
-        vc[current_q] = count
-
-        parts_map = context.user_data.setdefault("vs_voice_parts", {})
-        parts_map.setdefault(current_q, []).append(recognized)
-
-        remaining = max(0, 3 - count)
-        preview = recognized[:120] + ("…" if len(recognized) > 120 else "")
-        hint = (
-            f"🎙️ Yana {remaining} marta ovoz yuborishingiz mumkin, "
-            f"yoki pastdagi tugma bilan davom eting\\."
-            if remaining > 0 else
-            "🎙️ 3 ta ovoz to'ldi\\. Endi davom eting\\."
-        )
-
-        # Mavjud main.py pattern'lariga mos: faqat skip_/next_/finish ishlatiladi
+        parts.append(recognized)
+        preview = recognized[:150] + ("…" if len(recognized) > 150 else "")
         await update.message.reply_text(
-            f"✅ *Ovoz qabul qilindi\\! \\({count}/3\\)*\n\n"
-            f"_{esc_md(preview)}_\n\n"
-            f"{hint}",
+            f"✅ *Ovoz qabul qilindi\\!*\n\n_{esc_md(preview)}_\n\n"
+            f"Davom eting yoki yakunlang\\:",
             parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➡️ Keyingi savol", callback_data=f"vorstellen_next_{current_q}")],
-                [InlineKeyboardButton("🏁 Yakunlash", callback_data="vorstellen_finish")],
-            ]),
+            reply_markup=finish_keyboard,
         )
         return VORSTELLEN_START
 
@@ -658,19 +585,12 @@ async def vorstellen_process_new(update: Update, context: ContextTypes.DEFAULT_T
 
 async def _vorstellen_final_result(obj, context):
     """
-    Barcha javoblarni AI orqali tahlil qiladi va natija sahifasini ko'rsatadi.
-    obj — CallbackQuery yoki Message bo'lishi mumkin.
+    Yig'ilgan javobni (bitta umumiy matn) AI orqali tahlil qiladi va
+    natija sahifasini ko'rsatadi. obj — CallbackQuery yoki Message bo'lishi mumkin.
     """
-    # Qolgan ovoz qismlarini ham birlashtirib qo'yamiz
-    for q in range(1, 8):
-        _merge_voice_parts(context, q)
-
-    answers = context.user_data.get("vs_answers", {})
+    parts = context.user_data.get("vs_answer_parts", [])
     level = context.user_data.get("vs_level", "a1")
-
-    answered_nums = [q for q, a in answers.items() if a.get("text", "").strip()]
-    missed = [q for q in range(1, 8) if q not in answered_nums]
-    score = len(answered_nums)
+    all_text = " ".join(p.strip() for p in parts if p.strip()) or "Foydalanuvchi hech qanday javob bermadi."
 
     loading_text = (
         "🧠 *AI tahlil qilmoqda\\.\\.\\.*\n\n"
@@ -686,14 +606,14 @@ async def _vorstellen_final_result(obj, context):
     else:
         await obj.reply_text(loading_text, parse_mode="MarkdownV2")
 
-    all_text = "\n".join([
-        f"{q}. {VORSTELLEN_SAVOLLAR[q-1]['mavzu']}: {answers[q]['text']}"
-        for q in sorted(answered_nums)
-    ]) or "Foydalanuvchi hech qanday javob bermadi."
+    analysis = await _groq_json_vorstellen(all_text, level)
+    score = analysis.get("yulduz", 3)
+    try:
+        score = max(1, min(5, int(score)))
+    except (TypeError, ValueError):
+        score = 3
 
-    analysis = await _groq_json_vorstellen(all_text, missed, level)
     context.user_data["vs_analysis"] = analysis
-    context.user_data["vs_missed"] = missed
     context.user_data["vs_score"] = score
     context.user_data["vs_answers_text"] = all_text
 
@@ -701,16 +621,9 @@ async def _vorstellen_final_result(obj, context):
     try:
         from database import get_db
         db = get_db()
-        user_id = obj.from_user.id if is_query else context._user_id_workaround if False else None
-    except Exception:
-        db = None
-
-    try:
-        from database import get_db
-        db = get_db()
-        user_id = (obj.from_user.id if is_query else obj.chat.id)
+        user_id = obj.from_user.id if is_query else obj.chat.id
         xp = XP_REWARDS.get("vorstellen", 30) + score * 5
-        db.add_xp(user_id, xp, "vorstellen", f"Ball: {score}/7")
+        db.add_xp(user_id, xp, "vorstellen", f"Yulduz: {score}/5")
         for err in analysis.get("grammar_errors", [])[:5]:
             if err.get("xato") and err.get("togri"):
                 db.add_mistake(
@@ -728,23 +641,29 @@ async def _vorstellen_final_result(obj, context):
         return await _show_vorstellen_result_page(obj, context, as_message=True)
 
 
-async def _groq_json_vorstellen(all_text: str, missed: list, level: str) -> dict:
-    """Groq orqali JSON formatda Vorstellen tahlili oladi"""
+async def _groq_json_vorstellen(all_text: str, level: str) -> dict:
+    """Groq orqali JSON formatda Vorstellen tahlili oladi (bitta umumiy javob uchun)"""
     if not GROQ_API_KEY:
         return {"error": "AI xizmati mavjud emas"}
 
+    mavzular = ", ".join(s["mavzu"] for s in VORSTELLEN_SAVOLLAR)
+
     system_prompt = (
         "Siz nemis tili mutaxassisisiz. Foydalanuvchi Vorstellen (o'zini taqdim etish) "
-        "savollariga javob berdi. Javoblarni tahlil qiling va FAQAT quyidagi JSON "
+        "mashqida bitta umumiy javob berdi (matn yoki ovozdan tanilgan). Ideal javobda "
+        f"quyidagi mavzular yoritilishi kerak: {mavzular}\\. Foydalanuvchi hammasini "
+        "yoritmasligi mumkin — bu normal\\. Javobni tahlil qiling va FAQAT quyidagi JSON "
         "formatida javob bering — boshqa hech narsa yozmang:\n"
         "{\n"
+        '  "yulduz": 1-5 (umumiy sifat va to\'liqlik bahosi, butun son),\n'
         '  "grammar_score": 1-10,\n'
         '  "vocabulary_score": 1-10,\n'
         '  "fluency_score": 1-10,\n'
         '  "detected_level": "A1 yoki A2 yoki B1 yoki B2",\n'
+        '  "qoldirilgan_mavzular": ["foydalanuvchi yoritmagan mavzular ro\'yxati"],\n'
         '  "tushuntirish": "Xatolar va grammatika haqida o\'zbek tilida tushuntirish (3-5 gap)",\n'
-        '  "tarjima": "Foydalanuvchi javoblarining to\'g\'ri nemischa varianti (hammasi birlashtirilgan, ravon matn)",\n'
-        '  "yaxshilash_a1": "A1 darajasida to\'liq mukammal Vorstellen matni (7 mavzu yoritilgan)",\n'
+        '  "tarjima": "Foydalanuvchi javobining to\'g\'ri nemischa varianti (ravon matn)",\n'
+        '  "yaxshilash_a1": "A1 darajasida to\'liq mukammal Vorstellen matni (barcha mavzular yoritilgan)",\n'
         '  "yaxshilash_a2": "A2 darajasida to\'liq mukammal variant",\n'
         '  "yaxshilash_b1": "B1 darajasida to\'liq mukammal variant",\n'
         '  "yaxshilash_b2": "B2 darajasida to\'liq mukammal variant",\n'
@@ -766,8 +685,7 @@ async def _groq_json_vorstellen(all_text: str, missed: list, level: str) -> dict
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": (
-                            f"Foydalanuvchi javoblari:\n{all_text}\n\n"
-                            f"Qoldirilgan savollar: {missed if missed else 'yo\u02bbq'}\n"
+                            f"Foydalanuvchi javobi:\n{all_text}\n\n"
                             f"Foydalanuvchining hozirgi darajasi: {level.upper()}"
                         )},
                     ],
@@ -783,24 +701,20 @@ async def _groq_json_vorstellen(all_text: str, missed: list, level: str) -> dict
 
 
 VORSTELLEN_YULDUZ_IZOH = {
-    7: "Mukammal! Barcha bo'limlar yoritilgan.",
-    6: "Yaxshi! 1 ta bo'lim yetishmayapti.",
-    5: "O'rta. 2 ta bo'lim qoldirilgan.",
-    4: "Qoniqarli. 3 ta bo'lim yetishmayapti.",
-    3: "Kam. 4 ta bo'lim qoldirilgan.",
-    2: "Juda kam. 5 ta bo'lim yetishmayapti.",
-    1: "Juda zaif. 6 ta bo'lim qoldirilgan.",
-    0: "Hech qanday javob yo'q.",
+    5: "Mukammal! Juda yaxshi javob.",
+    4: "Yaxshi! Kichik kamchiliklar bor.",
+    3: "O'rta. Yana mashq qiling.",
+    2: "Kam. Ko'proq gapirishga harakat qiling.",
+    1: "Juda zaif. Qaytadan urinib ko'ring.",
 }
 
 
 async def _show_vorstellen_result_page(obj, context, as_message: bool = False):
     """Natija sahifasini ko'rsatadi (yulduz, ball, tugmalar)"""
     analysis = context.user_data.get("vs_analysis", {}) or {}
-    score = context.user_data.get("vs_score", 0)
-    missed = context.user_data.get("vs_missed", [])
+    score = context.user_data.get("vs_score", 3)
 
-    stars = "⭐" * score + "☆" * (7 - score)
+    stars = "⭐" * score + "☆" * (5 - score)
     izoh = VORSTELLEN_YULDUZ_IZOH.get(score, "")
     level_detected = analysis.get("detected_level", "?")
 
@@ -808,16 +722,17 @@ async def _show_vorstellen_result_page(obj, context, as_message: bool = False):
         f"🎉 *Vorstellen Natijasi*\n\n"
         f"{esc_md(stars)}\n"
         f"_{esc_md(izoh)}_\n\n"
-        f"📊 *Ball: {score}/7*\n"
+        f"📊 *Yulduz: {score}/5*\n"
         f"📚 Grammatika: {analysis.get('grammar_score', '?')}/10\n"
         f"🗣️ So'z boyligi: {analysis.get('vocabulary_score', '?')}/10\n"
         f"💬 Ravonlik: {analysis.get('fluency_score', '?')}/10\n\n"
         f"🎯 *Aniqlangan daraja: {esc_md(str(level_detected))}*\n\n"
     )
 
-    if missed:
-        missed_str = ", ".join(map(str, missed))
-        text += f"⚠️ *Qoldirilgan savollar: {esc_md(missed_str)}*\n\n"
+    qoldirilgan = analysis.get("qoldirilgan_mavzular", [])
+    if qoldirilgan:
+        qoldirilgan_str = ", ".join(qoldirilgan)
+        text += f"⚠️ *Yoritilmagan mavzular: {esc_md(qoldirilgan_str)}*\n\n"
 
     good = analysis.get("good_points", [])
     if good:
@@ -1057,7 +972,7 @@ async def vorstellen_pdf_new(update: Update, context: ContextTypes.DEFAULT_TYPE)
         caption=(
             f"✅ *Vorstellen — {esc_md(level.upper())} daraja*\n\n"
             f"📑 PDF fayl tayyor\\!\n"
-            f"⭐ Ball: {score}/7\n\n"
+            f"⭐ Yulduz: {score}/5\n\n"
             f"💡 Bu matnni yodlang va har kuni mashq qiling\\!\n\n"
             f"📚 @sprechenmitspass"
         ),
@@ -1183,7 +1098,7 @@ def build_vorstellen_pdf(level, score, grammar_score, vocab_score, fluency_score
                 c.roundRect(ex, by, badge_w, badge_h, 4, fill=1, stroke=0)
                 c.setFillColor(DARK)
                 c.setFont("Helvetica-Bold", 12)
-                c.drawCentredString(ex + badge_w/2, by + 0.27*cm, f"{score}/7")
+                c.drawCentredString(ex + badge_w/2, by + 0.27*cm, f"{score}/5")
 
                 # Ajratuvchi chiziq
                 sep_y = title_y - 0.85*cm
