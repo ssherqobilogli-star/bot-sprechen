@@ -1062,8 +1062,8 @@ async def aktiv_sprechen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     ])
 
     text = (
-        "💬 *Aktiv Sprechen*\n\n"
-        "A1–B2 darajalarida so'z boyligi:\n"
+        "💬 Aktiv Sprechen\n\n"
+        "A1-B2 darajalarida so'z boyligi:\n"
         "📕 Motive | 📗 Schritte | 📘 Menschen\n"
         "📙 Sicher | 📓 Aspekte | 📔 KompassDaF\n\n"
         "Quyidagi tugmani bosing:"
@@ -1072,9 +1072,9 @@ async def aktiv_sprechen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.callback_query:
         query = update.callback_query
         await query.answer()
-        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+        await query.edit_message_text(text, reply_markup=keyboard)
     else:
-        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+        await update.message.reply_text(text, reply_markup=keyboard)
     return AI_AKTIV_LEVEL
 
 async def aktiv_level_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
