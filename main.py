@@ -29,6 +29,7 @@ from telegram.ext import (
 )
 
 from config import (
+    MINI_APP_URL,
     logger, TOKEN, GROQ_API_KEY, ADMIN_IDS,
     LEVEL_LABELS, AKTIV_SPRECHEN_TOPICS, VORSTELLEN_QUESTIONS,
     XP_REWARDS, TTS_VOICES,
@@ -990,52 +991,104 @@ def build_vorstellen_pdf(level, score, grammar_score, vocab_score, fluency_score
     return buf.getvalue()
 
 
-# ==================== AKTIV SPRECHHEN ====================
+# ==================== AKTIV SPRECHEN (vocabulary.json based) ====================
+
+# vocabulary.json ni bir marta yuklash
+_AKTIV_VOCAB_DATA: dict = {}
+
+def _load_aktiv_vocab() -> dict:
+    """vocabulary.json ni yuklash (lazy, bir marta)"""
+    global _AKTIV_VOCAB_DATA
+    if _AKTIV_VOCAB_DATA:
+        return _AKTIV_VOCAB_DATA
+    # Bot papkasida data/vocabulary.json bo'lishi kerak
+    paths = [
+        os.path.join(os.path.dirname(__file__), "data", "vocabulary.json"),
+        os.path.join(os.path.dirname(__file__), "vocabulary.json"),
+        "data/vocabulary.json",
+        "vocabulary.json",
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                _AKTIV_VOCAB_DATA = json.load(f)
+            logger.info(f"vocabulary.json yuklandi: {p}")
+            return _AKTIV_VOCAB_DATA
+    logger.warning("vocabulary.json topilmadi!")
+    return {}
+
+
+def _aktiv_level_key(level_code: str) -> str:
+    """'a1' → 'A1' konvertatsiya"""
+    return level_code.upper()
+
+
+def _aktiv_books(level_code: str) -> list[str]:
+    """Berilgan daraja uchun kitoblar ro'yxati"""
+    data = _load_aktiv_vocab()
+    level_key = _aktiv_level_key(level_code)
+    return list(data.get(level_key, {}).keys())
+
+
+def _aktiv_chapters(level_code: str, book: str) -> list[str]:
+    """Kitob uchun lektsiyalar ro'yxati"""
+    data = _load_aktiv_vocab()
+    level_key = _aktiv_level_key(level_code)
+    return list(data.get(level_key, {}).get(book, {}).keys())
+
+
+def _aktiv_words(level_code: str, book: str, chapter: str) -> list[dict]:
+    """Lektsiya so'zlari"""
+    data = _load_aktiv_vocab()
+    level_key = _aktiv_level_key(level_code)
+    return data.get(level_key, {}).get(book, {}).get(chapter, [])
+
+
+# Kitob emoji lari
+_BOOK_EMOJI = {
+    "Motivie": "📕", "Schritte": "📗", "Menschen": "📘",
+    "Sicher": "📙", "Aspekte": "📓", "Kompassdaf": "📔",
+}
+
 
 async def aktiv_sprechen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Aktiv Sprechen - daraja tanlash"""
+    """Aktiv Sprechen — daraja tanlash"""
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("A1", callback_data="aktiv_level_a1"),
          InlineKeyboardButton("A2", callback_data="aktiv_level_a2")],
         [InlineKeyboardButton("B1", callback_data="aktiv_level_b1"),
          InlineKeyboardButton("B2", callback_data="aktiv_level_b2")],
-        [InlineKeyboardButton("C1", callback_data="aktiv_level_c1")],
         [InlineKeyboardButton("🏠 Asosiy menyu", callback_data="main_menu")],
     ])
+
+    text = (
+        "💬 *Aktiv Sprechen*\n\n"
+        "Darajangizni tanlang:\n\n"
+        "A1–B2 darajalarida Motive, Schritte, Menschen\n"
+        "va Sicher, Aspekte, KompassDaF kitoblari mavjud\\."
+    )
 
     if update.callback_query:
         query = update.callback_query
         await query.answer()
-        await query.edit_message_text(
-            "💬 *Aktiv Sprechen*\n\n"
-            "Darajangizni tanlang:\n\n"
-            "Har bir darajada 20 ta mavzu, har mavzuda 25 ta so'z va 1 ta hikoya.",
-            parse_mode="MarkdownV2",
-            reply_markup=keyboard,
-        )
+        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     else:
-        await update.message.reply_text(
-            "💬 *Aktiv Sprechen*\n\nDarajangizni tanlang:",
-            parse_mode="MarkdownV2",
-            reply_markup=keyboard,
-        )
+        await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     return AI_AKTIV_LEVEL
 
 
 async def aktiv_level_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Aktiv Sprechen - mavzu tanlash"""
+    """Aktiv Sprechen — kitob tanlash"""
     query = update.callback_query
     await query.answer()
 
     level = query.data.replace("aktiv_level_", "")
     context.user_data["aktiv_level"] = level
 
-    db = get_db()
-    topics = db.get_aktiv_topics(level)
-
-    if not topics:
+    books = _aktiv_books(level)
+    if not books:
         await query.edit_message_text(
-            f"⚠️ *{level.upper()}* darajasida hali mavzular mavjud emas.",
+            f"⚠️ *{level.upper()}* darajasida ma'lumot topilmadi\\.",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("↩️ Orqaga", callback_data="aktiv_sprechen")],
@@ -1044,145 +1097,149 @@ async def aktiv_level_select(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return AI_AKTIV_LEVEL
 
     keyboard_rows = []
-    for i in range(0, len(topics), 2):
-        row = []
-        for t in topics[i:i+2]:
-            row.append(InlineKeyboardButton(
-                f"{t['topic_id']}. {t['name_uz']}",
-                callback_data=f"aktiv_topic_{t['id']}"
-            ))
-        keyboard_rows.append(row)
+    for book in books:
+        emoji = _BOOK_EMOJI.get(book, "📚")
+        chapters = _aktiv_chapters(level, book)
+        keyboard_rows.append([
+            InlineKeyboardButton(
+                f"{emoji} {book} ({len(chapters)} lektion)",
+                callback_data=f"aktiv_book_{level}_{book}"
+            )
+        ])
     keyboard_rows.append([InlineKeyboardButton("↩️ Orqaga", callback_data="aktiv_sprechen")])
 
     await query.edit_message_text(
-        f"💬 *Aktiv Sprechen — {level.upper()}*\n\n"
-        f"Mavzuni tanlang ({len(topics)} ta mavzu):",
+        f"💬 *Aktiv Sprechen — {esc_md(level.upper())}*\n\n"
+        f"Kitobni tanlang:",
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(keyboard_rows),
     )
     return AI_AKTIV_TOPIC
 
 
-async def aktiv_topic_detail(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Aktiv Sprechen - mavzu tafsilotlari"""
+async def aktiv_book_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Aktiv Sprechen — lektsiya tanlash"""
     query = update.callback_query
     await query.answer()
 
-    topic_db_id = int(query.data.replace("aktiv_topic_", ""))
-    context.user_data["aktiv_topic_id"] = topic_db_id
+    # callback_data: aktiv_book_{level}_{book}
+    parts = query.data.split("_", 3)  # ['aktiv', 'book', level, book]
+    level = parts[2]
+    book = parts[3]
+    context.user_data["aktiv_level"] = level
+    context.user_data["aktiv_book"] = book
 
-    db = get_db()
-    topic = db.get_aktiv_topic_by_id(topic_db_id)
-    vocab = db.get_aktiv_vocab(topic_db_id)
-    story = db.get_aktiv_story(topic_db_id)
-    grammar = db.get_aktiv_grammar(topic_db_id)
-
-    if not topic:
-        await query.edit_message_text("❌ Mavzu topilmadi.")
+    chapters = _aktiv_chapters(level, book)
+    if not chapters:
+        await query.edit_message_text(
+            "⚠️ Lektsiyalar topilmadi\\.",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("↩️ Orqaga", callback_data=f"aktiv_level_{level}")],
+            ]),
+        )
         return AI_AKTIV_TOPIC
 
-    text = (
-        f"📚 *{esc_md(topic['name_de'])}*\n"
-        f"🇺🇿 {esc_md(topic['name_uz'])}\n\n"
+    keyboard_rows = []
+    for i in range(0, len(chapters), 3):
+        row = []
+        for ch in chapters[i:i+3]:
+            word_count = len(_aktiv_words(level, book, ch))
+            row.append(InlineKeyboardButton(
+                f"{ch} ({word_count})",
+                callback_data=f"aktiv_ch_{level}_{book}_{ch}"
+            ))
+        keyboard_rows.append(row)
+    keyboard_rows.append([InlineKeyboardButton("↩️ Orqaga", callback_data=f"aktiv_level_{level}")])
+
+    emoji = _BOOK_EMOJI.get(book, "📚")
+    await query.edit_message_text(
+        f"💬 *{emoji} {esc_md(book)} — {esc_md(level.upper())}*\n\n"
+        f"Lektsiyani tanlang:",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(keyboard_rows),
     )
-
-    if vocab:
-        text += f"📖 *Lug'at ({len(vocab)} ta so'z):*\n\n"
-        for i, v in enumerate(vocab[:10], 1):
-            text += f"{i}. *{esc_md(v['german'])}* — {esc_md(v['uzbek'])}\n"
-        if len(vocab) > 10:
-            text += f"_...va yana {len(vocab) - 10} ta so'z_\n"
-
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📖 Barcha so'zlarni ko'rish", callback_data="aktiv_vocab_all")],
-        [InlineKeyboardButton("📖 Hikoya", callback_data="aktiv_story")],
-        [InlineKeyboardButton("📊 Grammatika", callback_data="aktiv_grammar")],
-        [InlineKeyboardButton("🔊 Ovozda eshitish", callback_data="aktiv_speak")],
-        [InlineKeyboardButton("↩️ Mavzular", callback_data=f"aktiv_level_{topic['level']}")],
-    ])
-
-    await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     return AI_AKTIV_DETAIL
 
 
-async def aktiv_detail_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Aktiv Sprechen detail tugmalari"""
+async def aktiv_chapter_words(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Aktiv Sprechen — lektsiya so'zlari"""
     query = update.callback_query
     await query.answer()
-    data = query.data
 
-    db = get_db()
-    topic_id = context.user_data.get("aktiv_topic_id", 0)
-    topic = db.get_aktiv_topic_by_id(topic_id)
-    level = topic.get("level", "a1") if topic else "a1"
+    # callback_data: aktiv_ch_{level}_{book}_{chapter}
+    raw = query.data  # aktiv_ch_a1_Motivie_Lektion 1
+    prefix = "aktiv_ch_"
+    rest = raw[len(prefix):]  # a1_Motivie_Lektion 1
+    parts = rest.split("_", 2)  # ['a1', 'Motivie', 'Lektion 1']
+    level = parts[0]
+    book = parts[1]
+    chapter = parts[2]
 
-    if data == "aktiv_vocab_all":
-        vocab = db.get_aktiv_vocab(topic_id)
-        text = f"📖 *{esc_md(topic['name_de'])} — Lug'at*\n\n"
-        for i, v in enumerate(vocab, 1):
-            article = f"{v['article']} " if v.get('article') else ""
-            plural = f" ({v['plural']})" if v.get('plural') else ""
-            text += f"{i}. *{esc_md(article + v['german'] + plural)}* — {esc_md(v['uzbek'])}\n"
-            if v.get("example_de"):
-                text += f"   _{esc_md(v['example_de'])}_\n"
-            text += "\n"
+    context.user_data["aktiv_level"] = level
+    context.user_data["aktiv_book"] = book
+    context.user_data["aktiv_chapter"] = chapter
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("↩️ Orqaga", callback_data=f"aktiv_topic_{topic_id}")],
-        ])
-        await query.edit_message_text(text[:4000], parse_mode="MarkdownV2", reply_markup=keyboard)
+    words = _aktiv_words(level, book, chapter)
+    if not words:
+        await query.edit_message_text(
+            "⚠️ So'zlar topilmadi\\.",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("↩️ Orqaga", callback_data=f"aktiv_book_{level}_{book}")],
+            ]),
+        )
+        return AI_AKTIV_DETAIL
 
-    elif data == "aktiv_story":
-        story = db.get_aktiv_story(topic_id)
-        if story:
-            text = (
-                f"📖 *{esc_md(story.get('title_de', ''))}*\n"
-                f"🇺🇿 {esc_md(story.get('title_uz', ''))}\n\n"
-                f"{esc_md(story.get('story_de', ''))}\n\n"
-                f"🇺🇿 *Tarjima:*\n{esc_md(story.get('story_uz', ''))}"
-            )
-        else:
-            text = "📖 Hikoya hali qo'shilmagan."
+    emoji = _BOOK_EMOJI.get(book, "📚")
+    text = f"📖 *{emoji} {esc_md(book)} — {esc_md(chapter)}*\n"
+    text += f"_Jami: {len(words)} ta so'z_\n\n"
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔊 Ovozda eshitish", callback_data="aktiv_speak_story")],
-            [InlineKeyboardButton("↩️ Orqaga", callback_data=f"aktiv_topic_{topic_id}")],
-        ])
-        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    # Birinchi 30 ta so'z
+    shown = words[:30]
+    for i, w in enumerate(shown, 1):
+        article = f"{w['article']} " if w.get("article") else ""
+        text += f"{i}\\. *{esc_md(article + w['german'])}* — {esc_md(w['uzbek'])}\n"
 
-    elif data == "aktiv_grammar":
-        grammar = db.get_aktiv_grammar(topic_id)
-        if grammar:
-            text = f"📊 *Grammatika — {esc_md(topic['name_de'])}*\n\n"
-            for g in grammar:
-                text += f"📌 *{esc_md(g['rule_name'])}*\n{esc_md(g['rule_explanation'])}\n\n"
-                if g.get("examples"):
-                    text += f"_Misollar:_\n{esc_md(g['examples'])}\n\n"
-        else:
-            text = "📊 Grammatika qoidalari hali qo'shilmagan."
+    if len(words) > 30:
+        text += f"\n_\\.\\.\\. va yana {len(words) - 30} ta so'z_"
 
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("↩️ Orqaga", callback_data=f"aktiv_topic_{topic_id}")],
-        ])
-        await query.edit_message_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔊 Ovozda eshitish", callback_data="aktiv_speak_ch")],
+        [InlineKeyboardButton("↩️ Lektsiyalar", callback_data=f"aktiv_book_{level}_{book}")],
+        [InlineKeyboardButton("🏠 Asosiy menyu", callback_data="main_menu")],
+    ])
 
-    elif data in ("aktiv_speak", "aktiv_speak_story"):
-        if data == "aktiv_speak_story":
-            story = db.get_aktiv_story(topic_id)
-            text_to_speak = story.get("story_de", "") if story else ""
-        else:
-            vocab = db.get_aktiv_vocab(topic_id)
-            words = [v['german'] for v in vocab[:10]]
-            text_to_speak = ", ".join(words) if words else "So'zlar mavjud emas."
+    await query.edit_message_text(text[:4096], parse_mode="MarkdownV2", reply_markup=keyboard)
+    return AI_AKTIV_DETAIL
 
-        if text_to_speak:
-            await query.answer("🔊 Ovoz tayyorlanmoqda...")
-            try:
-                await speak_text(query, text_to_speak[:500])
-            except Exception as e:
-                logger.error(f"Ovoz yuborishda xato: {e}")
-        else:
-            await query.answer("⚠️ Ovoz uchun matn yo'q", show_alert=True)
+
+async def aktiv_speak_chapter(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Aktiv Sprechen — lektsiya so'zlarini ovozda o'qish"""
+    query = update.callback_query
+
+    level = context.user_data.get("aktiv_level", "a1")
+    book = context.user_data.get("aktiv_book", "")
+    chapter = context.user_data.get("aktiv_chapter", "")
+
+    words = _aktiv_words(level, book, chapter)
+    if not words:
+        await query.answer("⚠️ So'zlar topilmadi", show_alert=True)
+        return AI_AKTIV_DETAIL
+
+    # Birinchi 15 ta so'zni ovozda o'qish
+    items = []
+    for w in words[:15]:
+        article = f"{w['article']} " if w.get("article") else ""
+        items.append(f"{article}{w['german']}")
+    text_to_speak = ". ".join(items)
+
+    await query.answer("🔊 Ovoz tayyorlanmoqda...")
+    try:
+        await speak_text(query, text_to_speak[:600])
+    except Exception as e:
+        logger.error(f"Ovoz yuborishda xato: {e}")
+        await query.answer("❌ Ovoz yuborib bo'lmadi", show_alert=True)
 
     return AI_AKTIV_DETAIL
 
@@ -1280,11 +1337,28 @@ async def lugat_book_select(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def lugat_chapter_words(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Lug'at - so'zlarni ko'rsatish"""
+    """Lug'at - so'zlarni ko'rsatish (raqamlangan, izoh, sahifalar)"""
     query = update.callback_query
     await query.answer()
 
-    chapter_id = int(query.data.replace("lugat_ch_", ""))
+    raw = query.data
+    if raw.startswith("lugat_ch_"):
+        chapter_id = int(raw.replace("lugat_ch_", ""))
+        context.user_data["lugat_chapter_id"] = chapter_id
+        context.user_data["lugat_page"] = 0
+    elif raw.startswith("lugat_page_"):
+        parts = raw.split("_")
+        chapter_id = int(parts[2])
+        page = int(parts[3])
+        context.user_data["lugat_chapter_id"] = chapter_id
+        context.user_data["lugat_page"] = page
+    else:
+        chapter_id = context.user_data.get("lugat_chapter_id", 1)
+
+    chapter_id = context.user_data.get("lugat_chapter_id", 1)
+    page = context.user_data.get("lugat_page", 0)
+    PAGE_SIZE = 15
+
     db = get_db()
     words = db.get_lugat_words(chapter_id)
     chapter = db.get_lugat_chapter_by_id(chapter_id)
@@ -1299,19 +1373,163 @@ async def lugat_chapter_words(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return LUGAT_CHAPTER
 
-    text = f"📖 *{esc_md(chapter.get('name', 'Lug\'at'))}*\n\n"
-    for i, w in enumerate(words[:25], 1):
-        text += f"{i}. *{esc_md(w['german'])}* — {esc_md(w['uzbek'])}\n"
-        if w.get("izoh"):
-            text += f"   📝 _{esc_md(w['izoh'])}_\n"
+    total = len(words)
+    total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    start = page * PAGE_SIZE
+    end = min(start + PAGE_SIZE, total)
+    page_words = words[start:end]
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔊 Ovozda eshitish", callback_data="lugat_speak")],
-        [InlineKeyboardButton("↩️ Orqaga", callback_data=f"lugat_book_{context.user_data.get('lugat_book_id', 1)}")],
+    book = db.get_lugat_book_by_id(context.user_data.get("lugat_book_id", 1))
+    book_name = book.get("name", "") if book else ""
+    chapter_name = chapter.get("name", "Lug'at") if chapter else "Lug'at"
+
+    text = f"📖 *{esc_md(book_name)} — {esc_md(chapter_name)}*\n"
+    page_info = f"So'zlar: {start+1}\u2013{end} / {total}"
+    text += f"_{esc_md(page_info)}_\n\n"
+
+    for i, w in enumerate(page_words, start=start + 1):
+        text += f"*{i}\\.* 🇩🇪 *{esc_md(w['german'])}* — 🇺🇿 {esc_md(w['uzbek'])}\n"
+        if w.get("izoh"):
+            for izoh_line in w['izoh'].split('\n'):
+                izoh_line = izoh_line.strip()
+                if izoh_line:
+                    text += f"   _{esc_md(izoh_line)}_\n"
+        text += "\n"
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("⬅️ Oldingi", callback_data=f"lugat_page_{chapter_id}_{page-1}"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton("➡️ Keyingi", callback_data=f"lugat_page_{chapter_id}_{page+1}"))
+
+    keyboard_rows = []
+    if nav_row:
+        keyboard_rows.append(nav_row)
+    keyboard_rows.append([
+        InlineKeyboardButton("🧠 Yodladim! (AI Hikoya)", callback_data=f"lugat_yodladim_{chapter_id}"),
+    ])
+    keyboard_rows.append([
+        InlineKeyboardButton("↩️ Orqaga", callback_data=f"lugat_book_{context.user_data.get('lugat_book_id', 1)}"),
     ])
 
-    await query.edit_message_text(text[:4000], parse_mode="MarkdownV2", reply_markup=keyboard)
+    await query.edit_message_text(
+        text[:4000],
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(keyboard_rows),
+    )
     return LUGAT_WORDS
+
+
+async def lugat_yodladim_presentation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Yodladim! — AI lugatlardan hikoya prezentatsiya tuzadi"""
+    query = update.callback_query
+    await query.answer()
+
+    raw = query.data
+    chapter_id = int(raw.replace("lugat_yodladim_", ""))
+
+    db = get_db()
+    words = db.get_lugat_words(chapter_id)
+    chapter = db.get_lugat_chapter_by_id(chapter_id)
+
+    level = context.user_data.get("lugat_level", "a1")
+    book = db.get_lugat_book_by_id(context.user_data.get("lugat_book_id", 1))
+    book_name = book.get("name", "") if book else ""
+    chapter_name = chapter.get("name", "Lektion") if chapter else "Lektion"
+
+    if not words:
+        await query.edit_message_text(
+            "⚠️ So'zlar topilmadi.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ Orqaga", callback_data=f"lugat_ch_{chapter_id}")]]),
+        )
+        return LUGAT_WORDS
+
+    sample = random.sample(words, min(10, len(words)))
+    words_list = "\n".join([f"- {w['german']} ({w['uzbek']})" for w in sample])
+
+    loading_msg = await query.message.reply_text(
+        "🤖 *AI hikoya tuzmoqda\\.\\.\\.*\n⏳ Bir oz kuting\\.\\.\\.",
+        parse_mode="MarkdownV2",
+    )
+
+    level_upper = level.upper()
+    system_prompt = (
+        f"Siz nemis tili o'qituvchisisiz. {level_upper} darajasidagi talaba uchun yozyapsiz.\n"
+        "Quyidagi so'zlardan foydalanib:\n"
+        "1. KICHIK HIKOYA (5-8 gap, daraja muvofiq nemischa) yarating\n"
+        "2. Hikoya ostida O'ZBEKCHA TARJIMA bering\n"
+        "3. Eng muhim 3 ta so'zni misol bilan ajrating\n"
+        "4. Oxirida qisqa motivatsiya gapi bering (o'zbekcha)\n\n"
+        f"Daraja: {level_upper}. {'Oddiy qisqa gaplar.' if level in ('a1','a2') else 'Murakkab gaplar, yon gaplar.'}\n\n"
+        "Format:\n"
+        "🇩🇪 HIKOYA:\n[nemischa 5-8 gap]\n\n"
+        "🇺🇿 TARJIMA:\n[o'zbekcha]\n\n"
+        "⭐ MUHIM SO'ZLAR:\n[3 ta so'z — misol gap]\n\n"
+        "💪 MOTIVATSIYA:\n[1 gap o'zbekcha]"
+    )
+
+    presentation_text = await groq_lugat_hikoya(system_prompt, words_list, level)
+
+    try:
+        await loading_msg.delete()
+    except Exception:
+        pass
+
+    header = (
+        f"🧠 *Yodladim\\! — {esc_md(book_name)} {esc_md(chapter_name)}*\n"
+        f"📊 *Daraja:* {esc_md(level_upper)}\n\n"
+        f"_Axshila yodlang — aks holda aktiv Sprechen bo'lmay, "
+        f"so'zlar faqat boshingizdagi yuk bo'lib qoladi\\. "
+        f"Asosiysi — ishlatish\\!_ 🚀\n\n"
+        "━━━━━━━━━━━━━━━━━━━\n\n"
+    )
+
+    full_text = header + esc_md(presentation_text[:2800])
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Yangi hikoya", callback_data=f"lugat_yodladim_{chapter_id}")],
+        [InlineKeyboardButton("📖 So'zlarga qaytish", callback_data=f"lugat_ch_{chapter_id}")],
+        [InlineKeyboardButton("↩️ Lektionlarga", callback_data=f"lugat_book_{context.user_data.get('lugat_book_id', 1)}")],
+    ])
+
+    await query.message.reply_text(full_text[:4096], parse_mode="MarkdownV2", reply_markup=keyboard)
+    return LUGAT_WORDS
+
+
+async def groq_lugat_hikoya(system_prompt: str, words_list: str, level: str) -> str:
+    """Groq API orqali lug'at hikoya yaratish"""
+    if not GROQ_API_KEY:
+        return (
+            "🇩🇪 HIKOYA:\nIch lerne jeden Tag neue Wörter auf Deutsch. Das macht mir Spaß!\n\n"
+            "🇺🇿 TARJIMA:\nMen har kuni yangi nemischa so'zlar o'rganaman. Bu menga yoqadi!\n\n"
+            "⭐ MUHIM SO'ZLAR:\nlernen — o'rganmoq: Ich lerne Deutsch.\n"
+            "jeden Tag — har kuni: Jeden Tag arbeite ich.\nneu — yangi: Das ist neu.\n\n"
+            "💪 MOTIVATSIYA:\nHar bir o'rgangan so'z sizi orzuingizdagi mamlakatga yaqinlashtiradi!"
+        )
+
+    import httpx
+    user_msg = f"Quyidagi so'zlardan foydalaning:\n{words_list}\n\nHikoya yozing:"
+
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "llama3-70b-8192",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_msg},
+                    ],
+                    "max_tokens": 1024,
+                    "temperature": 0.8,
+                },
+            )
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        logger.error(f"Groq hikoya xatosi: {e}")
+        return f"AI xatosi yuz berdi.\n\nO'rganilgan so'zlar:\n{words_list}"
 
 
 # ==================== TARJIMON ====================
@@ -2074,10 +2292,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return await aktiv_sprechen_menu(update, context)
     elif data.startswith("aktiv_level_"):
         return await aktiv_level_select(update, context)
-    elif data.startswith("aktiv_topic_"):
-        return await aktiv_topic_detail(update, context)
-    elif data in ("aktiv_vocab_all", "aktiv_story", "aktiv_grammar", "aktiv_speak", "aktiv_speak_story"):
-        return await aktiv_detail_handler(update, context)
+    elif data.startswith("aktiv_book_"):
+        return await aktiv_book_select(update, context)
+    elif data.startswith("aktiv_ch_"):
+        return await aktiv_chapter_words(update, context)
+    elif data == "aktiv_speak_ch":
+        return await aktiv_speak_chapter(update, context)
 
     # Lug'at
     elif data == "lugat_menu":
@@ -2088,6 +2308,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return await lugat_book_select(update, context)
     elif data.startswith("lugat_ch_"):
         return await lugat_chapter_words(update, context)
+    elif data.startswith("lugat_page_"):
+        return await lugat_chapter_words(update, context)
+    elif data.startswith("lugat_yodladim_"):
+        return await lugat_yodladim_presentation(update, context)
 
     # Tarjimon
     elif data == "tarjimon":
