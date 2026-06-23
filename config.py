@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 # ==================== ENVIRONMENT ====================
 TOKEN = os.environ.get("BOT_TOKEN", "")
+MINI_APP_URL = os.environ.get("MINI_APP_URL", "https://app-mini-production.up.railway.app")
+AKTIV_SPRECHEN_URL = os.environ.get("AKTIV_SPRECHEN_URL", "https://aktiv-sprechen-production.up.railway.app")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 ADMIN_IDS = [int(x.strip()) for x in os.environ.get("ADMIN_IDS", "").split(",") if x.strip()]
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
