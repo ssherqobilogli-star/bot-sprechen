@@ -1052,20 +1052,21 @@ _BOOK_EMOJI = {
 
 
 async def aktiv_sprechen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Aktiv Sprechen — daraja tanlash"""
+    """Aktiv Sprechen — saytni ochish"""
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("A1", callback_data="aktiv_level_a1"),
-         InlineKeyboardButton("A2", callback_data="aktiv_level_a2")],
-        [InlineKeyboardButton("B1", callback_data="aktiv_level_b1"),
-         InlineKeyboardButton("B2", callback_data="aktiv_level_b2")],
+        [InlineKeyboardButton(
+            "🌐 Aktiv Sprechen — ochish",
+            web_app=WebAppInfo(url="https://aktiv-sprechen-production.up.railway.app")
+        )],
         [InlineKeyboardButton("🏠 Asosiy menyu", callback_data="main_menu")],
     ])
 
     text = (
         "💬 *Aktiv Sprechen*\n\n"
-        "Darajangizni tanlang:\n\n"
-        "A1–B2 darajalarida Motive, Schritte, Menschen\n"
-        "va Sicher, Aspekte, KompassDaF kitoblari mavjud\\."
+        "A1–B2 darajalarida so'z boyligi:\n"
+        "📕 Motive \| 📗 Schritte \| 📘 Menschen\n"
+        "📙 Sicher \| 📓 Aspekte \| 📔 KompassDaF\n\n"
+        "Quyidagi tugmani bosing:"
     )
 
     if update.callback_query:
@@ -1075,7 +1076,6 @@ async def aktiv_sprechen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         await update.message.reply_text(text, parse_mode="MarkdownV2", reply_markup=keyboard)
     return AI_AKTIV_LEVEL
-
 
 async def aktiv_level_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Aktiv Sprechen — kitob tanlash"""
