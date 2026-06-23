@@ -29,7 +29,7 @@ from telegram.ext import (
 )
 
 from config import (
-    MINI_APP_URL,
+    MINI_APP_URL, AKTIV_SPRECHEN_URL,
     logger, TOKEN, GROQ_API_KEY, ADMIN_IDS,
     LEVEL_LABELS, AKTIV_SPRECHEN_TOPICS, VORSTELLEN_QUESTIONS,
     XP_REWARDS, TTS_VOICES,
@@ -1056,7 +1056,7 @@ async def aktiv_sprechen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(
             "🌐 Aktiv Sprechen — ochish",
-            web_app=WebAppInfo(url="https://aktiv-sprechen-production.up.railway.app")
+            web_app=WebAppInfo(url=AKTIV_SPRECHEN_URL)
         )],
         [InlineKeyboardButton("🏠 Asosiy menyu", callback_data="main_menu")],
     ])
@@ -1064,8 +1064,8 @@ async def aktiv_sprechen_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = (
         "💬 *Aktiv Sprechen*\n\n"
         "A1–B2 darajalarida so'z boyligi:\n"
-        "📕 Motive \| 📗 Schritte \| 📘 Menschen\n"
-        "📙 Sicher \| 📓 Aspekte \| 📔 KompassDaF\n\n"
+        "📕 Motive | 📗 Schritte | 📘 Menschen\n"
+        "📙 Sicher | 📓 Aspekte | 📔 KompassDaF\n\n"
         "Quyidagi tugmani bosing:"
     )
 
