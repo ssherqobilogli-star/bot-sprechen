@@ -54,30 +54,24 @@ def is_admin(user_id: int) -> bool:
 
 # ==================== PASTKI DOIMIY MENYU ====================
 
-REPLY_KEYBOARD = ReplyKeyboardMarkup(
-    [
-        ["🤖 AI Mentor", "💬 Aktiv Sprechen"],
+def build_reply_keyboard(aktiv_url: str, is_admin: bool = False) -> ReplyKeyboardMarkup:
+    """Pastki klaviaturani yaratish — Aktiv Sprechen WebApp tugmasi bilan"""
+    rows = [
+        ["🤖 AI Mentor", KeyboardButton("💬 Aktiv Sprechen", web_app=WebAppInfo(url=aktiv_url))],
         ["📖 Lug'at", "🌐 Tarjimon"],
         ["📚 Sayfa", "📚 Kitob Materiallar"],
         ["📖 Kunlik so'z", "📊 Progressim"],
         ["📝 Test", "⚙️ Sozlamalar"],
-    ],
-    resize_keyboard=True,
-    is_persistent=True,
-)
+    ]
+    if is_admin:
+        rows.append(["🔐 Admin Panel"])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
 
-ADMIN_REPLY_KEYBOARD = ReplyKeyboardMarkup(
-    [
-        ["🤖 AI Mentor", "💬 Aktiv Sprechen"],
-        ["📖 Lug'at", "🌐 Tarjimon"],
-        ["📚 Sayfa", "📚 Kitob Materiallar"],
-        ["📖 Kunlik so'z", "📊 Progressim"],
-        ["📝 Test", "⚙️ Sozlamalar"],
-        ["🔐 Admin Panel"],
-    ],
-    resize_keyboard=True,
-    is_persistent=True,
-)
+
+# Global klaviaturalar (URL config dan olinadi)
+from config import AKTIV_SPRECHEN_URL as _AKTIV_URL
+REPLY_KEYBOARD = build_reply_keyboard(_AKTIV_URL, is_admin=False)
+ADMIN_REPLY_KEYBOARD = build_reply_keyboard(_AKTIV_URL, is_admin=True)
 
 
 # ==================== STATES ====================
