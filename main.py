@@ -20,7 +20,7 @@ import io
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
     ReplyKeyboardMarkup, KeyboardButton, InputFile,
-    WebAppInfo, MenuButtonWebApp, Contact,
+    WebAppInfo, MenuButtonWebApp, MenuButtonDefault, Contact,
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -54,10 +54,10 @@ def is_admin(user_id: int) -> bool:
 
 # ==================== PASTKI DOIMIY MENYU ====================
 
-def build_reply_keyboard(aktiv_url: str, mini_app_url: str, is_admin: bool = False) -> ReplyKeyboardMarkup:
-    """Pastki klaviaturani yaratish — WebApp tugmalari bilan"""
+def build_reply_keyboard(aktiv_url: str, mini_app_url: str = "", is_admin: bool = False) -> ReplyKeyboardMarkup:
+    """Pastki klaviaturani yaratish — Aktiv Sprechen WebApp tugmasi bilan"""
     rows = [
-        [KeyboardButton("✨ Jeden Tag Lernen", web_app=WebAppInfo(url=mini_app_url)), KeyboardButton("💬 Aktiv Sprechen", web_app=WebAppInfo(url=aktiv_url))],
+        ["🤖 AI Mentor", KeyboardButton("💬 Aktiv Sprechen", web_app=WebAppInfo(url=aktiv_url))],
         ["📖 Lug'at", "🌐 Tarjimon"],
         ["📚 Sayfa", "📚 Kitob Materiallar"],
         ["📖 Kunlik so'z", "📊 Progressim"],
@@ -2365,7 +2365,12 @@ def main() -> None:
         logger.error("BOT_TOKEN topilmadi! Railway env da o'rnating.")
         return
 
-    application = Application.builder().token(TOKEN).build()
+    async def post_init(application):
+        """Bot ishga tushganda Mini App tugmasini o'chirish"""
+        await application.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
+        logger.info("Mini App tugmasi o'chirildi — oddiy menyu o'rnatildi.")
+
+    application = Application.builder().token(TOKEN).post_init(post_init).build()
 
     # Asosiy ConversationHandler
     conv_handler = ConversationHandler(
