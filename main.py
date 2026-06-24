@@ -58,10 +58,9 @@ def build_reply_keyboard(aktiv_url: str, mini_app_url: str, is_admin: bool = Fal
     """Pastki klaviaturani yaratish — WebApp tugmalari bilan"""
     rows = [
         [KeyboardButton("✨ Jeden Tag Lernen", web_app=WebAppInfo(url=mini_app_url)), KeyboardButton("💬 Aktiv Sprechen", web_app=WebAppInfo(url=aktiv_url))],
-        ["📖 Lug'at", "🌐 Tarjimon"],
+        ["🌐 Tarjimon"],
         ["📚 Sayfa", "📚 Kitob Materiallar"],
         ["📖 Kunlik so'z", "📊 Progressim"],
-        ["📝 Test", "⚙️ Sozlamalar"],
     ]
     if is_admin:
         rows.append(["🔐 Admin Panel"])
