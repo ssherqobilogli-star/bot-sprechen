@@ -2199,6 +2199,134 @@ async def test_finish(query, context: ContextTypes.DEFAULT_TYPE) -> int:
     return TEST_RESULT
 
 
+
+# ==================== AI CHAT ====================
+
+async def ai_chat_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """AI Chat - Groq orqali erkin suhbat"""
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🆕 Yangi suhbat (auto)", callback_data="aichat_auto")],
+        [InlineKeyboardButton("🇩🇪 Nemis tilida gaplash", callback_data="aichat_german")],
+        [InlineKeyboardButton("🇺🇿 O'zbek tilida savol", callback_data="aichat_uzbek")],
+    ])
+    msg = (
+        "🤖 AI Chat\n\n"
+        "Men bilan istalgan mavzuda gaplashing!\n\n"
+        "🇩🇪 Nemis rejimi — nemis tilida javob beraman, xatolarni tog'rilaman\n"
+        "🇺🇿 O'zbek rejimi — nemis tili haqida o'zbek tilida savolingizni bering\n"
+        "🔄 Auto — qaysi tilda yozsang, shunda javob\n\n"
+        "Rejimni tanlang:"
+    )
+    await update.message.reply_text(msg, reply_markup=kb)
+    return MAIN_MENU
+
+
+async def ai_chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """AI Chat rejimini tanlash"""
+    query = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+    mode = query.data.replace("aichat_", "")
+
+    mode_texts = {
+        "auto": "🔄 Auto rejim — qaysi tilda yozsang, shunda javob beraman",
+        "german": "🇩🇪 Nemis rejimi — FAQAT nemis tilida javob beraman va xatolaringizni to'g'rilaman",
+        "uzbek": "🇺🇿 O'zbek rejimi — nemis tili haqida o'zbek tilida savolingizni bering",
+    }
+
+    context.user_data["ai_chat_mode"] = mode
+    context.user_data["ai_chat_history"] = []
+    context.user_data["state"] = "ai_chat"
+
+    stop_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⏹ Suhbatni tugatish", callback_data="aichat_stop")]
+    ])
+
+    msg = mode_texts.get(mode, '') + "\n\nYozing!"
+    await query.edit_message_text(msg, reply_markup=stop_kb)
+    return MAIN_MENU
+
+
+async def ai_chat_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """AI Chat ni to'xtatish"""
+    query = update.callback_query
+    await query.answer()
+    context.user_data.pop("ai_chat_mode", None)
+    context.user_data.pop("ai_chat_history", None)
+    context.user_data.pop("state", None)
+
+    user = update.effective_user
+    kb = ADMIN_REPLY_KEYBOARD if is_admin(user.id) else REPLY_KEYBOARD
+    await query.edit_message_text("✅ AI Chat tugatildi.")
+    await context.bot.send_message(user.id, "Asosiy menyu:", reply_markup=kb)
+    return MAIN_MENU
+
+
+async def ai_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """AI Chat xabarini Groq orqali qayta ishlash"""
+    import requests as req_lib
+    text = update.message.text
+    mode = context.user_data.get("ai_chat_mode", "auto")
+    history = context.user_data.get("ai_chat_history", [])
+
+    if mode == "german":
+        system = (
+            "Siz nemis tili o'qituvchisisiz. Foydalanuvchi bilan FAQAT nemis tilida gaplashing. "
+            "Xatolarni to'g'rilang. Javob oxirida: 'Tarjima: ...' formatida o'zbekcha tarjima bering."
+        )
+    elif mode == "uzbek":
+        system = (
+            "Siz nemis tili bo'yicha yordamchi AI siz. "
+            "O'zbek tilida savollarga o'zbek tilida javob bering. "
+            "Nemis tili haqida tushuntirib, misollar keltiring."
+        )
+    else:
+        system = (
+            "Siz nemis tili o'qituvchisisiz va universal yordamchisiz. "
+            "Foydalanuvchi qaysi tilda yozsa, shu tilda javob bering. "
+            "Nemis tilida xato bo'lsa to'g'rilang."
+        )
+
+    thinking = await update.message.reply_text("🤖 O'ylayapman...")
+
+    history.append({"role": "user", "content": text})
+    recent = [{"role": "system", "content": system}] + history[-10:]
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "llama3-70b-8192",
+        "messages": recent,
+        "temperature": 0.7,
+        "max_tokens": 1024
+    }
+
+    try:
+        resp = req_lib.post(GROQ_API_URL, headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        result = resp.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        logger.error(f"AI Chat xatolik: {e}")
+        result = None
+
+    await thinking.delete()
+
+    stop_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("⏹ Suhbatni tugatish", callback_data="aichat_stop")]
+    ])
+
+    if result:
+        history.append({"role": "assistant", "content": result})
+        context.user_data["ai_chat_history"] = history[-20:]
+        await update.message.reply_text(f"🤖 {result}", reply_markup=stop_kb)
+    else:
+        await update.message.reply_text("❌ Xatolik. Qayta urinib ko'ring.", reply_markup=stop_kb)
+
+    return MAIN_MENU
+
+
 # ==================== PASTKI TUGMA HANDLERLARI ====================
 
 async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
