@@ -2203,21 +2203,22 @@ async def test_finish(query, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ==================== AI CHAT ====================
 
 async def ai_chat_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """AI Chat - Groq orqali erkin suhbat"""
+    """AI Chat — Nemis tili suhbat, audio javob, xato tuzatish"""
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🆕 Yangi suhbat (auto)", callback_data="aichat_auto")],
-        [InlineKeyboardButton("🇩🇪 Nemis tilida gaplash", callback_data="aichat_german")],
-        [InlineKeyboardButton("🇺🇿 O'zbek tilida savol", callback_data="aichat_uzbek")],
+        [InlineKeyboardButton("💬 Erkin suhbat (nemischa)", callback_data="aichat_free")],
+        [InlineKeyboardButton("📚 Mavzu bo'yicha suhbat",   callback_data="aichat_topic")],
+        [InlineKeyboardButton("🔊 Audio javob: yoq/o'chiq", callback_data="aichat_audio")],
     ])
-    msg = (
-        "🤖 AI Chat\n\n"
-        "Men bilan istalgan mavzuda gaplashing!\n\n"
-        "🇩🇪 Nemis rejimi — nemis tilida javob beraman, xatolarni tog'rilaman\n"
-        "🇺🇿 O'zbek rejimi — nemis tili haqida o'zbek tilida savolingizni bering\n"
-        "🔄 Auto — qaysi tilda yozsang, shunda javob\n\n"
-        "Rejimni tanlang:"
+    await update.message.reply_text(
+        "🤖 <b>AI Chat — Nemis tili yordamchisi</b>\n\n"
+        "💬 <b>Erkin suhbat</b> — nemischa yozing yoki ovoz yuboring, "
+        "AI javob beradi, xatolarni to\'g\'rilaydi va suhbatni davom ettiradi\n\n"
+        "📚 <b>Mavzu bo\'yicha</b> — daraja tanlang, mavzu tanlang, "
+        "AI suhbatni o\'zi boshlaydi\n\n"
+        "<i>Rejimni tanlang:</i>",
+        parse_mode="HTML",
+        reply_markup=kb
     )
-    await update.message.reply_text(msg, reply_markup=kb)
     return MAIN_MENU
 
 
@@ -2225,104 +2226,220 @@ async def ai_chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """AI Chat rejimini tanlash"""
     query = update.callback_query
     await query.answer()
+    data = query.data
     user_id = update.effective_user.id
-    mode = query.data.replace("aichat_", "")
 
-    mode_texts = {
-        "auto": "🔄 Auto rejim — qaysi tilda yozsang, shunda javob beraman",
-        "german": "🇩🇪 Nemis rejimi — FAQAT nemis tilida javob beraman va xatolaringizni to'g'rilaman",
-        "uzbek": "🇺🇿 O'zbek rejimi — nemis tili haqida o'zbek tilida savolingizni bering",
-    }
+    if data == "aichat_audio":
+        # Audio toggle
+        current = context.user_data.get("aichat_audio", True)
+        context.user_data["aichat_audio"] = not current
+        status = "✅ Yoqildi" if not current else "❌ O\'chirildi"
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💬 Erkin suhbat (nemischa)", callback_data="aichat_free")],
+            [InlineKeyboardButton("📚 Mavzu bo\'yicha suhbat",   callback_data="aichat_topic")],
+            [InlineKeyboardButton(f"🔊 Audio javob: {status}",   callback_data="aichat_audio")],
+        ])
+        await query.edit_message_reply_markup(reply_markup=kb)
+        return MAIN_MENU
 
-    context.user_data["ai_chat_mode"] = mode
-    context.user_data["ai_chat_history"] = []
-    context.user_data["state"] = "ai_chat"
+    if data == "aichat_free":
+        context.user_data["aichat_mode"]    = "free"
+        context.user_data["aichat_history"] = []
+        context.user_data["state"]          = "ai_chat"
+        stop_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛑 Suhbatni tugatish", callback_data="aichat_stop")]
+        ])
+        await query.edit_message_text(
+            "💬 <b>Erkin suhbat rejimi</b>\n\n"
+            "Nemischa yozing yoki ovozli xabar yuboring.\n"
+            "AI javob beradi, xatolaringizni to\'g\'rilaydi.\n\n"
+            "<i>Tugatish uchun qizil tugmani bosing.</i>",
+            parse_mode="HTML",
+            reply_markup=stop_kb
+        )
+        return MAIN_MENU
 
-    stop_kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⏹ Suhbatni tugatish", callback_data="aichat_stop")]
-    ])
+    if data == "aichat_topic":
+        context.user_data["aichat_mode"]    = "topic_select"
+        context.user_data["aichat_history"] = []
+        context.user_data["state"]          = "ai_chat"
+        # Daraja tanlash — LEVELS config dan
+        level_buttons = []
+        for code, info in LEVELS.items():
+            level_buttons.append([
+                InlineKeyboardButton(
+                    f"{info['emoji']} {info['name']}",
+                    callback_data=f"aichat_level_{code}"
+                )
+            ])
+        await query.edit_message_text(
+            "📚 <b>Daraja tanlang:</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(level_buttons)
+        )
+        return MAIN_MENU
 
-    msg = mode_texts.get(mode, '') + "\n\nYozing!"
-    await query.edit_message_text(msg, reply_markup=stop_kb)
+    if data.startswith("aichat_level_"):
+        level_code = data.replace("aichat_level_", "")
+        context.user_data["aichat_level"] = level_code
+        if level_code not in LEVELS:
+            return MAIN_MENU
+        topics = LEVELS[level_code]["topics"]
+        topic_buttons = []
+        for i, topic in enumerate(topics):
+            topic_buttons.append([
+                InlineKeyboardButton(f"{i+1}. {topic}", callback_data=f"aichat_topicsel_{level_code}_{i}")
+            ])
+        topic_buttons.append([InlineKeyboardButton("🔙 Orqaga", callback_data="aichat_topic")])
+        await query.edit_message_text(
+            f"📚 <b>Mavzu tanlang ({LEVELS[level_code]['name']}):</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(topic_buttons)
+        )
+        return MAIN_MENU
+
+    if data.startswith("aichat_topicsel_"):
+        parts = data.split("_")
+        # aichat_topicsel_A1_3 -> parts = ['aichat','topicsel','A1','3']
+        level_code = parts[2]
+        topic_idx  = int(parts[3])
+        topic = LEVELS[level_code]["topics"][topic_idx]
+
+        context.user_data["aichat_mode"]    = "topic"
+        context.user_data["aichat_topic"]   = topic
+        context.user_data["aichat_level"]   = level_code
+        context.user_data["aichat_history"] = []
+        context.user_data["state"]          = "ai_chat"
+
+        stop_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛑 Suhbatni tugatish", callback_data="aichat_stop")]
+        ])
+        await query.edit_message_text(
+            f"📌 <b>Mavzu:</b> {topic}\n"
+            f"📊 <b>Daraja:</b> {level_code}\n\n"
+            f"⏳ AI suhbatni boshlayapti...",
+            parse_mode="HTML",
+            reply_markup=stop_kb
+        )
+
+        # AI o'zi birinchi gap boshlaydi — async Groq
+        import aiohttp
+        system = (
+            f"Du bist ein freundlicher Deutschlehrer. "
+            f"Beginne ein Gesprach auf Deutsch zum Thema: \'{topic}\' (Niveau: {level_code}). "
+            f"Schreibe 2-3 einleitende Satze auf Deutsch und stelle eine erste Frage. "
+            f"Fuge eine kurze uzbekische Ubersetzung in Klammern hinzu: (O\'zbek: ...)"
+        )
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": "Beginne das Gesprach."}
+        ]
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        payload = {"model": "llama3-70b-8192", "messages": messages, "temperature": 0.8, "max_tokens": 400}
+        intro = None
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    GROQ_API_URL, headers=headers, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=60)
+                ) as resp:
+                    resp.raise_for_status()
+                    d = await resp.json()
+                    intro = d["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"AI Chat intro xatolik: {e}")
+
+        if intro:
+            context.user_data["aichat_history"].append({"role": "assistant", "content": intro})
+            await context.bot.send_message(
+                update.effective_user.id,
+                f"🤖 {intro}",
+                parse_mode="HTML"
+            )
+        return MAIN_MENU
+
     return MAIN_MENU
 
 
 async def ai_chat_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """AI Chat ni to'xtatish"""
+    """AI Chat ni to\'xtatish"""
     query = update.callback_query
     await query.answer()
-    context.user_data.pop("ai_chat_mode", None)
-    context.user_data.pop("ai_chat_history", None)
-    context.user_data.pop("state", None)
+    context.user_data.pop("aichat_mode",    None)
+    context.user_data.pop("aichat_history", None)
+    context.user_data.pop("aichat_topic",   None)
+    context.user_data.pop("aichat_level",   None)
+    context.user_data.pop("state",          None)
 
     user = update.effective_user
     kb = ADMIN_REPLY_KEYBOARD if is_admin(user.id) else REPLY_KEYBOARD
-    await query.edit_message_text("✅ AI Chat tugatildi.")
+    await query.edit_message_text("✅ Suhbat tugatildi.")
     await context.bot.send_message(user.id, "Asosiy menyu:", reply_markup=kb)
     return MAIN_MENU
 
 
 async def ai_chat_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """AI Chat xabarini Groq orqali qayta ishlash"""
-    import requests as req_lib
-    text = update.message.text
-    mode = context.user_data.get("ai_chat_mode", "auto")
-    history = context.user_data.get("ai_chat_history", [])
+    """AI Chat xabarini async Groq orqali qayta ishlash + audio javob"""
+    import aiohttp
+    text     = update.message.text
+    mode     = context.user_data.get("aichat_mode", "free")
+    history  = context.user_data.get("aichat_history", [])
+    audio_on = context.user_data.get("aichat_audio", True)
+    topic    = context.user_data.get("aichat_topic", "Umumiy")
+    level    = context.user_data.get("aichat_level", "A1")
 
-    if mode == "german":
+    if mode == "free":
         system = (
-            "Siz nemis tili o'qituvchisisiz. Foydalanuvchi bilan FAQAT nemis tilida gaplashing. "
-            "Xatolarni to'g'rilang. Javob oxirida: 'Tarjima: ...' formatida o'zbekcha tarjima bering."
-        )
-    elif mode == "uzbek":
-        system = (
-            "Siz nemis tili bo'yicha yordamchi AI siz. "
-            "O'zbek tilida savollarga o'zbek tilida javob bering. "
-            "Nemis tili haqida tushuntirib, misollar keltiring."
+            "Du bist ein freundlicher Deutschlehrer fur Uzbek-sprachige Lernende. "
+            "Antworte IMMER auf Deutsch, kurz und naturlich (2-4 Satze). "
+            "Wenn der Nutzer einen Fehler macht, korrigiere ihn sanft auf Deutsch, "
+            "dann fahre mit dem Gesprach fort. "
+            "Am Ende jeder Antwort fuge eine neue Frage auf Deutsch hinzu. "
+            "Schreibe auch eine kurze uzbekische Ubersetzung deiner Antwort in Klammern: (O\'zbek: ...)"
         )
     else:
         system = (
-            "Siz nemis tili o'qituvchisisiz va universal yordamchisiz. "
-            "Foydalanuvchi qaysi tilda yozsa, shu tilda javob bering. "
-            "Nemis tilida xato bo'lsa to'g'rilang."
+            f"Du bist ein Deutschlehrer. Das Thema des Gesprachs ist: \'{topic}\' (Niveau: {level}). "
+            f"Bleibe immer bei diesem Thema. "
+            f"Antworte auf Deutsch in 2-4 Satzen, dem Niveau {level} angepasst. "
+            f"Korrigiere Fehler des Nutzers kurz auf Deutsch. "
+            f"Stelle am Ende eine thematische Frage auf Deutsch. "
+            f"Fuge eine kurze uzbekische Ubersetzung in Klammern hinzu: (O\'zbek: ...)"
         )
 
-    thinking = await update.message.reply_text("🤖 O'ylayapman...")
+    thinking = await update.message.reply_text("⌛ Javob tayyorlanmoqda...")
 
     history.append({"role": "user", "content": text})
-    recent = [{"role": "system", "content": system}] + history[-10:]
+    messages = [{"role": "system", "content": system}] + history[-10:]
 
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "llama3-70b-8192",
-        "messages": recent,
-        "temperature": 0.7,
-        "max_tokens": 1024
-    }
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    payload = {"model": "llama3-70b-8192", "messages": messages, "temperature": 0.8, "max_tokens": 600}
 
+    result = None
     try:
-        resp = req_lib.post(GROQ_API_URL, headers=headers, json=payload, timeout=60)
-        resp.raise_for_status()
-        result = resp.json()["choices"][0]["message"]["content"]
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                GROQ_API_URL, headers=headers, json=payload,
+                timeout=aiohttp.ClientTimeout(total=60)
+            ) as resp:
+                resp.raise_for_status()
+                d = await resp.json()
+                result = d["choices"][0]["message"]["content"]
     except Exception as e:
         logger.error(f"AI Chat xatolik: {e}")
-        result = None
 
     await thinking.delete()
 
     stop_kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⏹ Suhbatni tugatish", callback_data="aichat_stop")]
+        [InlineKeyboardButton("🛑 Suhbatni tugatish", callback_data="aichat_stop")]
     ])
 
     if result:
         history.append({"role": "assistant", "content": result})
-        context.user_data["ai_chat_history"] = history[-20:]
-        await update.message.reply_text(f"🤖 {result}", reply_markup=stop_kb)
+        context.user_data["aichat_history"] = history[-20:]
+        await update.message.reply_text(f"🤖 {result}", parse_mode="HTML", reply_markup=stop_kb)
     else:
-        await update.message.reply_text("❌ Xatolik. Qayta urinib ko'ring.", reply_markup=stop_kb)
+        await update.message.reply_text("❌ Xatolik. Qayta urinib ko\'ring.", reply_markup=stop_kb)
 
     return MAIN_MENU
 
