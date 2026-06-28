@@ -61,6 +61,7 @@ def build_reply_keyboard(aktiv_url: str, mini_app_url: str, is_admin: bool = Fal
         ["🌐 Tarjimon"],
         ["📚 Sayfa", "📚 Kitob Materiallar"],
         ["📖 Kunlik so'z", "📊 Progressim"],
+        ["🤖 AI Chat"],
     ]
     if is_admin:
         rows.append(["🔐 Admin Panel"])
@@ -2204,6 +2205,10 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
     """Pastki doimiy tugmalarni qayta ishlash"""
     text = update.message.text
 
+    # AI Chat state da bo'lsa, suhbatni davom ettirish
+    if context.user_data.get("state") == "ai_chat":
+        return await ai_chat_message(update, context)
+
     if text == "🤖 AI Mentor":
         return await ai_mentor_menu(update, context)
     elif text == "💬 Aktiv Sprechen":
@@ -2226,6 +2231,8 @@ async def reply_keyboard_handler(update: Update, context: ContextTypes.DEFAULT_T
         return await settings_menu(update, context)
     elif text == "🔐 Admin Panel":
         return await admin_panel(update, context)
+    elif text == "🤖 AI Chat":
+        return await ai_chat_menu(update, context)
 
     return MAIN_MENU
 
@@ -2238,8 +2245,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
     data = query.data
 
+    # AI Chat
+    if data.startswith("aichat_"):
+        if data == "aichat_stop":
+            return await ai_chat_stop(update, context)
+        else:
+            return await ai_chat_callback(update, context)
+
     # Asosiy menyu
-    if data == "main_menu":
+    elif data == "main_menu":
         return await show_main_menu(update, context)
 
     # Admin
